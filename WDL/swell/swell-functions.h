@@ -133,12 +133,11 @@ SWELL_API_DEFINE(void, SWELL_CFStringToCString, (const void *str, char *buf, int
 #undef PtInRect
 #endif
 #define PtInRect(r,p) SWELL_PtInRect(r,p)
-SWELL_API_DEFINE(BOOL, SWELL_PtInRect,(const RECT *r, POINT p))
+SWELL_API_DEFINE(BOOL, SWELL_PtInRect,(RECT *r, POINT p))
 
 /*
 ** ShellExecute(): 
-** NOTE: currently action is ignored, and it only works on content1 being an app, an URL beginning with http://,
-**       "notepad.exe" (content2=file to open), or "explorer.exe" (content2=folder to open, or content2=/select,"file_to_reveal_if_10.6+")
+** NOTE: currently action is ignored, and it only works on content1 being a URL beginning with http://.
 ** TODO: finish implementation
 */
 SWELL_API_DEFINE(BOOL, ShellExecute,(HWND hwndDlg, const char *action,  const char *content1, const char *content2, const char *content3, int blah))
@@ -281,8 +280,6 @@ SWELL_API_DEFINE(HWND, SetParent,(HWND hwnd, HWND newPar))
 */
 SWELL_API_DEFINE(HWND, GetWindow,(HWND hwnd, int what))
 
-SWELL_API_DEFINE(BOOL, EnumWindows, (BOOL (*proc)(HWND, LPARAM), LPARAM lp))
-
 SWELL_API_DEFINE(HWND,FindWindowEx,(HWND par, HWND lastw, const char *classname, const char *title))
 
 
@@ -306,8 +303,8 @@ SWELL_API_DEFINE(void, GetClientRect,(HWND hwnd, RECT *r))
 SWELL_API_DEFINE(HWND, WindowFromPoint,(POINT p))
 SWELL_API_DEFINE(BOOL, WinOffsetRect, (LPRECT lprc, int dx, int dy))
 SWELL_API_DEFINE(BOOL, WinSetRect, (LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom))
-SWELL_API_DEFINE(void,WinUnionRect,(RECT *out, const RECT *in1, const RECT *in2))
-SWELL_API_DEFINE(int,WinIntersectRect,(RECT *out, const RECT *in1, const RECT *in2))
+SWELL_API_DEFINE(void,WinUnionRect,(RECT *out, RECT *in1, RECT *in2))
+SWELL_API_DEFINE(int,WinIntersectRect,(RECT *out, RECT *in1, RECT *in2))
 
 
 /*
@@ -323,7 +320,7 @@ SWELL_API_DEFINE(int, SWELL_SetWindowLevel, (HWND hwnd, int newlevel))
 ** InvalidateRect()
 ** Notes: eraseBk is ignored, probably not threadsafe! hwnd can be NSWindow or NSView
 */
-SWELL_API_DEFINE(BOOL,InvalidateRect,(HWND hwnd, const RECT *r, int eraseBk))
+SWELL_API_DEFINE(void,InvalidateRect,(HWND hwnd, RECT *r, int eraseBk))
 
 /*
 ** UpdateWindow()
@@ -448,21 +445,16 @@ SWELL_API_DEFINE(void, ListView_SetItemText,(HWND h, int ipos, int cpos, const c
 SWELL_API_DEFINE(bool, ListView_SetItem,(HWND h, LVITEM *item))
 SWELL_API_DEFINE(int, ListView_GetNextItem,(HWND h, int istart, int flags))
 SWELL_API_DEFINE(bool, ListView_GetItem,(HWND h, LVITEM *item))
-SWELL_API_DEFINE(int, ListView_GetItemState,(HWND h, int ipos, UINT mask))
+SWELL_API_DEFINE(int, ListView_GetItemState,(HWND h, int ipos, int mask))
 SWELL_API_DEFINE(void, ListView_DeleteItem,(HWND h, int ipos))
 SWELL_API_DEFINE(void, ListView_DeleteAllItems,(HWND h))
 SWELL_API_DEFINE(int, ListView_GetSelectedCount,(HWND h))
 SWELL_API_DEFINE(int, ListView_GetItemCount,(HWND h))
 SWELL_API_DEFINE(int, ListView_GetSelectionMark,(HWND h))
 SWELL_API_DEFINE(void, ListView_SetColumnWidth,(HWND h, int colpos, int wid))
-SWELL_API_DEFINE(bool, ListView_SetItemState,(HWND h, int item, UINT state, UINT statemask))
+SWELL_API_DEFINE(bool, ListView_SetItemState,(HWND h, int item, int state, int statemask))
 SWELL_API_DEFINE(void, ListView_RedrawItems,(HWND h, int startitem, int enditem))
 SWELL_API_DEFINE(void, ListView_SetItemCount,(HWND h, int cnt))
-#ifdef ListView_SetItemCountEx
-#undef ListView_SetItemCountEx
-#endif
-#define ListView_SetItemCountEx(list,cnt,flags) ListView_SetItemCount(list,cnt)
-
 SWELL_API_DEFINE(void, ListView_EnsureVisible,(HWND h, int i, BOOL pok))
 SWELL_API_DEFINE(bool, ListView_GetSubItemRect,(HWND h, int item, int subitem, int code, RECT *r))
 SWELL_API_DEFINE(void, ListView_SetImageList,(HWND h, HIMAGELIST imagelist, int which)) 
@@ -489,7 +481,6 @@ SWELL_API_DEFINE(int, SWELL_GetListViewHeaderHeight, (HWND h))
 SWELL_API_DEFINE(HIMAGELIST, ImageList_CreateEx,())
 SWELL_API_DEFINE(BOOL, ImageList_Remove, (HIMAGELIST list, int idx))
 SWELL_API_DEFINE(int, ImageList_ReplaceIcon,(HIMAGELIST list, int offset, HICON image))
-SWELL_API_DEFINE(int, ImageList_Add,(HIMAGELIST list, HBITMAP image, HBITMAP mask))
 SWELL_API_DEFINE(void, ImageList_Destroy, (HIMAGELIST))
 /*
 ** TabCtrl api. 
@@ -509,7 +500,6 @@ SWELL_API_DEFINE(HTREEITEM, TreeView_InsertItem, (HWND hwnd, TV_INSERTSTRUCT *in
 SWELL_API_DEFINE(BOOL, TreeView_Expand,(HWND hwnd, HTREEITEM item, UINT flag))
 SWELL_API_DEFINE(HTREEITEM, TreeView_GetSelection,(HWND hwnd))
 SWELL_API_DEFINE(void, TreeView_DeleteItem,(HWND hwnd, HTREEITEM item))
-SWELL_API_DEFINE(void, TreeView_DeleteAllItems,(HWND hwnd))
 SWELL_API_DEFINE(void, TreeView_SelectItem,(HWND hwnd, HTREEITEM item))
 SWELL_API_DEFINE(BOOL, TreeView_GetItem,(HWND hwnd, LPTVITEM pitem))
 SWELL_API_DEFINE(BOOL, TreeView_SetItem,(HWND hwnd, LPTVITEM pitem))
@@ -555,7 +545,7 @@ SWELL_API_DEFINE(bool, EnableMenuItem,(HMENU hMenu, int idx, int en))
 SWELL_API_DEFINE(bool, DeleteMenu,(HMENU hMenu, int idx, int flag))
 SWELL_API_DEFINE(bool, CheckMenuItem,(HMENU hMenu, int idx, int chk))
 SWELL_API_DEFINE(void, InsertMenuItem,(HMENU hMenu, int pos, BOOL byPos, MENUITEMINFO *mi))
-SWELL_API_DEFINE(void,SWELL_InsertMenu,(HMENU menu, int pos, unsigned int flag, UINT_PTR idx, const char *str))
+SWELL_API_DEFINE(void,SWELL_InsertMenu,(HMENU menu, int pos, int flag, UINT_PTR idx, const char *str))
 #ifdef InsertMenu
 #undef InsertMenu
 #endif
@@ -739,10 +729,6 @@ SWELL_API_DEFINE(void, SWELL_MessageQueue_Clear,(HWND h))
 */
 #ifdef SWELL_TARGET_OSX
 SWELL_API_DEFINE(int, SWELL_MacKeyToWindowsKey,(void *nsevent, int *flags))
-
-  // ex is the same as normal, except if mode=1 it does more processing of raw keys w/ modifiers
-  // and also if nsevent==NULL current event is used
-SWELL_API_DEFINE(int, SWELL_MacKeyToWindowsKeyEx,(void *nsevent, int *flags, int mode))
 #endif
 SWELL_API_DEFINE(int,SWELL_KeyToASCII,(int wParam, int lParam, int *newflags))
 
@@ -825,7 +811,7 @@ SWELL_API_DEFINE(BOOL, SWELL_SetCursorPos, (int X, int Y))
 ** Gets screen information, for the screen that contains sourcerect. if wantWork is set
 ** it excluses the menu bar etc.
 */
-SWELL_API_DEFINE(void, SWELL_GetViewPort,(RECT *r, const RECT *sourcerect, bool wantWork))
+SWELL_API_DEFINE(void, SWELL_GetViewPort,(RECT *r, RECT *sourcerect, bool wantWork))
 
 /*
 ** Clipboard API emulation
@@ -880,10 +866,6 @@ SWELL_API_DEFINE(BOOL,ResetEvent,(HANDLE evt))
 SWELL_API_DEFINE(void,SWELL_EnsureMultithreadedCocoa,())
 SWELL_API_DEFINE(void *, SWELL_InitAutoRelease,())
 SWELL_API_DEFINE(void, SWELL_QuitAutoRelease,(void *p))
-SWELL_API_DEFINE(int,SWELL_TerminateProcess,(HANDLE hand))
-SWELL_API_DEFINE(int,SWELL_GetProcessExitCode,(HANDLE hand))
-SWELL_API_DEFINE(HANDLE,SWELL_CreateProcessIO,(const char *exe, int nparams, const char **params, bool redirectIO))
-SWELL_API_DEFINE(int,SWELL_ReadWriteProcessIO,(HANDLE, int w/*stdin,stdout,stderr*/, char *buf, int bufsz))
 #endif
 
 SWELL_API_DEFINE(HANDLE,SWELL_CreateProcess,(const char *exe, int nparams, const char **params))
@@ -893,8 +875,6 @@ SWELL_API_DEFINE(HINSTANCE,LoadLibraryGlobals,(const char *fileName, bool symbol
 SWELL_API_DEFINE(HINSTANCE,LoadLibrary,(const char *fileName))
 SWELL_API_DEFINE(void *,GetProcAddress,(HINSTANCE hInst, const char *procName))
 SWELL_API_DEFINE(BOOL,FreeLibrary,(HINSTANCE hInst))
-
-SWELL_API_DEFINE(void*,SWELL_GetBundle,(HINSTANCE hInst))
 
 /*
 ** GDI functions.
@@ -937,7 +917,7 @@ SWELL_API_DEFINE(void *, SWELL_GetCtxFrameBuffer,(HDC ctx))
 ** Some utility functions for pushing, setting, and popping the clip region. 
 */
 SWELL_API_DEFINE(void, SWELL_PushClipRegion,(HDC ctx))
-SWELL_API_DEFINE(void, SWELL_SetClipRegion,(HDC ctx, const RECT *r))
+SWELL_API_DEFINE(void, SWELL_SetClipRegion,(HDC ctx, RECT *r))
 SWELL_API_DEFINE(void, SWELL_PopClipRegion,(HDC ctx))
 
 
@@ -985,7 +965,7 @@ SWELL_API_DEFINE(void, DeleteObject,(HGDIOBJ))
 #define SetPixel SWELL_SetPixel
 #define Polygon(a,b,c) SWELL_Polygon(a,b,c)
 
-SWELL_API_DEFINE(void, SWELL_FillRect,(HDC ctx, const RECT *r, HBRUSH br))
+SWELL_API_DEFINE(void, SWELL_FillRect,(HDC ctx, RECT *r, HBRUSH br))
 SWELL_API_DEFINE(void, Rectangle,(HDC ctx, int l, int t, int r, int b))
 SWELL_API_DEFINE(void, Ellipse,(HDC ctx, int l, int t, int r, int b))
 SWELL_API_DEFINE(void, SWELL_Polygon,(HDC ctx, POINT *pts, int npts))
@@ -1002,24 +982,20 @@ SWELL_API_DEFINE(void, SetBkMode,(HDC ctx, int col))
 SWELL_API_DEFINE(void, RoundRect,(HDC ctx, int x, int y, int x2, int y2, int xrnd, int yrnd))
 SWELL_API_DEFINE(void, PolyPolyline,(HDC ctx, POINT *pts, DWORD *cnts, int nseg))
 SWELL_API_DEFINE(BOOL, GetTextMetrics,(HDC ctx, TEXTMETRIC *tm))
-SWELL_API_DEFINE(int, GetTextFace,(HDC ctx, int nCount, LPTSTR lpFaceName))
 #ifdef SWELL_TARGET_OSX
 SWELL_API_DEFINE(void *, GetNSImageFromHICON,(HICON))
 #endif
 SWELL_API_DEFINE(BOOL, GetObject, (HICON icon, int bmsz, void *_bm))
 SWELL_API_DEFINE(HICON, CreateIconIndirect, (ICONINFO* iconinfo))
 SWELL_API_DEFINE(HICON, LoadNamedImage,(const char *name, bool alphaFromMask))
-SWELL_API_DEFINE(void, DrawImageInRect,(HDC ctx, HICON img, const RECT *r))
+SWELL_API_DEFINE(void, DrawImageInRect,(HDC ctx, HICON img, RECT *r))
 SWELL_API_DEFINE(void, BitBlt,(HDC hdcOut, int x, int y, int w, int h, HDC hdcIn, int xin, int yin, int mode))
 SWELL_API_DEFINE(void, StretchBlt,(HDC hdcOut, int x, int y, int w, int h, HDC hdcIn, int xin, int yin, int srcw, int srch, int mode))
 SWELL_API_DEFINE(int, GetSysColor,(int idx))
 SWELL_API_DEFINE(HBITMAP, CreateBitmap,(int width, int height, int numplanes, int bitsperpixel, unsigned char* bits))
 
 SWELL_API_DEFINE(void, SetOpaque, (HWND h, bool isopaque))
-SWELL_API_DEFINE(void, SetAllowNoMiddleManRendering, (HWND h, bool allow)) // defaults to allow, use this to disable
 #ifdef SWELL_TARGET_OSX
-SWELL_API_DEFINE(int, SWELL_IsRetinaDC, (HDC hdc)) // returns 1 if DC is a retina DC (2x res possible)
-SWELL_API_DEFINE(int, SWELL_IsRetinaHWND, (HWND h)) // returns 1 if HWND is a retina HWND
 SWELL_API_DEFINE(void, SWELL_SetViewGL, (HWND h, bool wantGL))
 SWELL_API_DEFINE(bool, SWELL_GetViewGL, (HWND h))
 SWELL_API_DEFINE(bool, SWELL_SetGLContextToView, (HWND h)) // sets GL context to that view, returns TRUE if successs (use NULL to clear GL context)
@@ -1036,7 +1012,7 @@ SWELL_API_DEFINE(void, ReleaseDC,(HWND, HDC))
 SWELL_API_DEFINE(void, SWELL_FlushWindow,(HWND))
 #endif
             
-SWELL_API_DEFINE(void, SWELL_FillDialogBackground,(HDC hdc, const RECT *r, int level))
+SWELL_API_DEFINE(void, SWELL_FillDialogBackground,(HDC hdc, RECT *r, int level))
 
 SWELL_API_DEFINE(HGDIOBJ,SWELL_CloneGDIObject,(HGDIOBJ a))
 
@@ -1079,7 +1055,7 @@ SWELL_API_DEFINE(HWND, SWELL_MakeGroupBox,(const char *name, int idx, int x, int
 SWELL_API_DEFINE(HWND, SWELL_MakeCheckBox,(const char *name, int idx, int x, int y, int w, int h, int flags))
 SWELL_API_DEFINE(HWND, SWELL_MakeListBox,(int idx, int x, int y, int w, int h, int styles))
 
-SWELL_API_DEFINE(void, SWELL_Menu_AddMenuItem,(HMENU hMenu, const char *name, int idx, unsigned int flags))
+SWELL_API_DEFINE(void, SWELL_Menu_AddMenuItem,(HMENU hMenu, const char *name, int idx, int flags))
 SWELL_API_DEFINE(int, SWELL_GenerateMenuFromList,(HMENU hMenu, const void *list, int listsz)) // list is SWELL_MenuGen_Entry
 
 SWELL_API_DEFINE(void, SWELL_GenerateDialogFromList, (const void *list, int listsz))
@@ -1092,17 +1068,13 @@ SWELL_API_DEFINE(void,SWELL_Internal_PostMessage_Init,())
 
 SWELL_API_DEFINE(HCURSOR,SWELL_LoadCursorFromFile,(const char *fn))
 SWELL_API_DEFINE(void,SWELL_SetWindowWantRaiseAmt,(HWND h, int  amt))
-SWELL_API_DEFINE(int,SWELL_GetWindowWantRaiseAmt,(HWND))
 
 SWELL_API_DEFINE(void,SWELL_SetListViewFastClickMask,(HWND hList, int mask))
 
 
-SWELL_API_DEFINE(void,GetTempPath,(int sz, char *buf))
-
 #ifndef __APPLE__
 SWELL_API_DEFINE(void,SWELL_initargs,(int *argc, char ***argv))
 SWELL_API_DEFINE(void,SWELL_RunMessageLoop,())
-SWELL_API_DEFINE(HWND,SWELL_CreateXBridgeWindow,(HWND viewpar, void **wref, RECT*))
 #endif
 
 #ifdef __APPLE__
@@ -1116,15 +1088,6 @@ SWELL_API_DEFINE(BOOL,SWELL_IsGroupBox,(HWND))
 SWELL_API_DEFINE(BOOL,SWELL_IsButton,(HWND))
 SWELL_API_DEFINE(BOOL,SWELL_IsStaticText,(HWND))
 SWELL_API_DEFINE(void,SWELL_GetDesiredControlSize,(HWND hwnd, RECT *r))
-
-SWELL_API_DEFINE(int,AddFontResourceEx,(LPCTSTR str, DWORD fl, void *pdv))
-
-#ifdef __APPLE__
-SWELL_API_DEFINE(void,SWELL_DisableAppNap,(int disable))
-SWELL_API_DEFINE(int,SWELL_GetOSXVersion,())
-#endif
-
-SWELL_API_DEFINE(void,SWELL_Register_Cursor_Resource,(const char *idx, const char *name, int hotspot_x, int hotspot_y))
 
 
 #endif // _WDL_SWELL_H_API_DEFINED_

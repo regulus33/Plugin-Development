@@ -32,8 +32,6 @@ WDL_VWnd_Painter::WDL_VWnd_Painter()
   m_GSC=0;
   m_bm=0;
   m_bgbm=0;
-  m_bgbmtintUnderMode = false;
-  m_bgbmtintcolor = -1;
 
   m_paint_xorig=m_paint_yorig=0;
   m_cur_hwnd=0;
@@ -79,86 +77,52 @@ void WDL_VWnd_Painter::DoPaintBackground(LICE_IBitmap *bmOut, int bgcolor, const
       if (srcw  < wnd_w/4 || srch < wnd_h/4)
         fflags|=LICE_BLIT_FILTER_BILINEAR;
    
-      if (m_bgbmtintUnderMode)
-      {
-        tintRect(bmOut, clipr, xoffs, yoffs,true);
-      }
 
       if (m_bgcache && !xoffs && !yoffs)
       {
-        if (m_bgbmtintUnderMode)
+        LICE_IBitmap *tmp = m_bgcache->GetCachedBG(wnd_w,wnd_h,this,m_bgbm->bgimage);
+        if (tmp)
         {
-          LICE_IBitmap *tmp = m_bgcache->GetCachedBG(wnd_w, wnd_h, this, m_bgbm->bgimage);
-          if (!tmp)
-          {
-            tmp = m_bgcache->SetCachedBG(wnd_w, wnd_h, NULL, this, m_bgbm->bgimage);
-            
-            // if added to cache, scale and copy alpha information
-            if (tmp) WDL_VirtualWnd_ScaledBlitBG(tmp, m_bgbm, 0, 0, wnd_w, wnd_h,
-              0, 0,
-              wnd_w,
-              wnd_h,
-              1.0, LICE_BLIT_MODE_COPY | fflags);
-          }
-
-          if (tmp) // copy from cache
-          {
-            LICE_Blit(bmOut, tmp, clipr->left, clipr->top, clipr->left, clipr->top, clipr->right - clipr->left, clipr->bottom - clipr->top, 1.0f, LICE_BLIT_USE_ALPHA|LICE_BLIT_MODE_COPY);
-          }
-          else // scale as if no cache present
-          {
-            WDL_VirtualWnd_ScaledBlitBG(bmOut, m_bgbm, 0, 0, wnd_w, wnd_h,
-              0, 0,
-              wnd_w,
-              wnd_h,
-              1.0, LICE_BLIT_MODE_COPY | fflags | LICE_BLIT_USE_ALPHA);
-          }
-
+//          OutputDebugString("got cached render\n");
+          LICE_Blit(bmOut,tmp,clipr->left,clipr->top,clipr->left,clipr->top,clipr->right-clipr->left,clipr->bottom-clipr->top,1.0f,LICE_BLIT_MODE_COPY);
         }
         else
         {
-          // tint-over mode, we can render then cache
-          LICE_IBitmap *tmp = m_bgcache->GetCachedBG(wnd_w, wnd_h, this, m_bgbm->bgimage);
-          if (tmp)
-          {
-            LICE_Blit(bmOut, tmp, clipr->left, clipr->top, clipr->left, clipr->top, clipr->right - clipr->left, clipr->bottom - clipr->top, 1.0f, LICE_BLIT_MODE_COPY);
-          }
-          else
-          {
-            WDL_VirtualWnd_ScaledBlitBG(bmOut, m_bgbm, 0, 0, wnd_w, wnd_h,
-              0, 0,
-              wnd_w,
-              wnd_h,
-              1.0, LICE_BLIT_MODE_COPY | fflags);
-            m_bgcache->SetCachedBG(wnd_w, wnd_h, bmOut, this, m_bgbm->bgimage);
-          }
+//          char bf[4096];
+//          sprintf(bf,"fail %d,%d %08x\n",wnd_w,wnd_h,m_bgbm->bgimage);
+//          OutputDebugString(bf);
+          WDL_VirtualWnd_ScaledBlitBG(bmOut,m_bgbm,0,0,wnd_w,wnd_h,
+                                      0,0,
+                                      wnd_w,
+                                      wnd_h,
+                                      1.0,LICE_BLIT_MODE_COPY|fflags);
+          m_bgcache->SetCachedBG(wnd_w,wnd_h,bmOut,this,m_bgbm->bgimage);
         }
       }
-      else // no bg cache
+      else
       {
         WDL_VirtualWnd_ScaledBlitBG(bmOut,m_bgbm,xoffs,yoffs,wnd_w,wnd_h,
                                     clipr->left+xoffs,clipr->top+yoffs,
                                     clipr->right-clipr->left,
                                     clipr->bottom-clipr->top,
-                                    1.0, LICE_BLIT_MODE_COPY | fflags | (m_bgbmtintUnderMode?LICE_BLIT_USE_ALPHA:0));
+                                    1.0,LICE_BLIT_MODE_COPY|fflags);
       }
 
-      if (!m_bgbmtintUnderMode)
-        tintRect(bmOut,clipr,xoffs,yoffs,false);
+      tintRect(bmOut,clipr,xoffs,yoffs);
 
+      m_bgbm=0;
       return;
     }
   }
 
   if (bgcolor<0) bgcolor=m_GSC?m_GSC(COLOR_3DFACE):GetSysColor(COLOR_3DFACE);
 
-  int needfill=1;
-
-#ifdef WDL_VWND_WANTBGGRADIENT_SUPPORT
   double gradslope=m_gradslope;
   double gradstart=m_gradstart;
   bool wantGrad=m_wantg>0;
   if (m_wantg<0) wantGrad=WDL_STYLE_GetBackgroundGradient(&gradstart,&gradslope);
+
+  int needfill=1;
 
   if (wantGrad && gradslope >= 0.01)
   {
@@ -229,7 +193,7 @@ void WDL_VWnd_Painter::DoPaintBackground(LICE_IBitmap *bmOut, int bgcolor, const
     }
   }
 
-#endif//WDL_VWND_WANTBGGRADIENT_SUPPORT
+
 
   if (needfill)
   {
@@ -283,7 +247,7 @@ void WDL_VWnd_Painter::PaintBegin(HWND hwnd, int bgcolor, const RECT *limitBGrec
       
       if (m_bm->getWidth()<wnd_w || m_bm->getHeight() < wnd_h)
       {
-        m_bm->resize(wdl_max(m_bm->getWidth(),wnd_w),wdl_max(m_bm->getHeight(),wnd_h));
+        m_bm->resize(max(m_bm->getWidth(),wnd_w),max(m_bm->getHeight(),wnd_h));
       }
 
       if (!limitBGrect || (limitBGrect->left <1 && limitBGrect->top < 1 && limitBGrect->right >= fwnd_w && limitBGrect->bottom >= fwnd_h))
@@ -306,11 +270,11 @@ void WDL_VWnd_Painter::PaintBegin(HWND hwnd, int bgcolor, const RECT *limitBGrec
           int x=limitBGrect->left - m_paint_xorig;
           int y=limitBGrect->top - m_paint_yorig;
           LICE_SubBitmap bm(m_bm,x,y,w,h);
-          tr.left -= wdl_max(x,0);
-          tr.right -= wdl_max(x,0);
-          tr.bottom -= wdl_max(y,0);
-          tr.top -= wdl_max(y,0);
-          DoPaintBackground(&bm,bgcolor,&tr, w,h,-m_paint_xorig + wdl_min(x,0), -m_paint_yorig + wdl_min(y,0));
+          tr.left -= max(x,0);
+          tr.right -= max(x,0);
+          tr.bottom -= max(y,0);
+          tr.top -= max(y,0);
+          DoPaintBackground(&bm,bgcolor,&tr, w,h,-m_paint_xorig + min(x,0), -m_paint_yorig + min(y,0));
         }
       }
     }
@@ -347,9 +311,6 @@ static BOOL CALLBACK enumProc(HWND hwnd,LPARAM lParam)
 
 void WDL_VWnd_Painter::PaintEnd()
 {
-  m_bgbm=0;
-  m_bgbmtintUnderMode = false;
-  m_bgbmtintcolor = -1;
   if (!m_cur_hwnd) return;
   if (m_bm)
   {
@@ -397,15 +358,10 @@ void WDL_VWnd_Painter::GetPaintInfo(RECT *rclip, int *xoffsdraw, int *yoffsdraw)
   if (yoffsdraw) *yoffsdraw = -m_paint_yorig;
 }
 
-void WDL_VWnd_Painter::tintRect(LICE_IBitmap *bmOut, const RECT *clipr, int xoffs, int yoffs, bool isCopy)
+void WDL_VWnd_Painter::tintRect(LICE_IBitmap *bmOut, const RECT *clipr, int xoffs, int yoffs)
 {
   if (m_bgbmtintcolor>=0)
   {
-    if (isCopy)
-    {
-      LICE_FillRect(bmOut, clipr->left + xoffs, clipr->top + yoffs, clipr->right - clipr->left, clipr->bottom - clipr->top, LICE_RGBA_FROMNATIVE(m_bgbmtintcolor), 1.0f, LICE_BLIT_MODE_COPY);
-      return;
-    }
     float rv=GetRValue(m_bgbmtintcolor)/255.0f;
     float gv=GetGValue(m_bgbmtintcolor)/255.0f;
     float bv=GetBValue(m_bgbmtintcolor)/255.0f;
@@ -433,18 +389,6 @@ void WDL_VWnd_Painter::PaintBGCfg(WDL_VirtualWnd_BGCfg *bitmap, const RECT *coor
 {
   if (!bitmap || !coords || !bitmap->bgimage || !m_bm) return;
 
-  const RECT rr = {
-    wdl_max(coords->left, m_ps.rcPaint.left),
-    wdl_max(coords->top, m_ps.rcPaint.top),
-    wdl_min(coords->right, m_ps.rcPaint.right),
-    wdl_min(coords->bottom, m_ps.rcPaint.bottom)
-  };
-
-  if (allowTint && m_bgbmtintUnderMode)
-  {
-    if (rr.right>rr.left && rr.bottom>rr.top)
-      tintRect(m_bm, &rr, -m_paint_xorig, -m_paint_yorig,true);
-  }
 
   WDL_VirtualWnd_ScaledBlitBG(m_bm,bitmap,coords->left - m_paint_xorig,
                                           coords->top - m_paint_yorig,
@@ -455,10 +399,17 @@ void WDL_VWnd_Painter::PaintBGCfg(WDL_VirtualWnd_BGCfg *bitmap, const RECT *coor
                                           m_ps.rcPaint.right - m_ps.rcPaint.left,
                                           m_ps.rcPaint.bottom - m_ps.rcPaint.top,alpha,mode);
 
-  if (allowTint && !m_bgbmtintUnderMode)
+  if (allowTint) 
   {
+    RECT rr={
+      max(coords->left,m_ps.rcPaint.left),
+      max(coords->top,m_ps.rcPaint.top),
+      min(coords->right,m_ps.rcPaint.right),
+      min(coords->bottom,m_ps.rcPaint.bottom)
+    };
+
     if (rr.right>rr.left && rr.bottom>rr.top)
-      tintRect(m_bm,&rr,-m_paint_xorig,-m_paint_yorig,false);
+      tintRect(m_bm,&rr,-m_paint_xorig,-m_paint_yorig);
   }
 
 }
@@ -1097,9 +1048,9 @@ LICE_IBitmap *WDL_VirtualWnd_BGCfgCache::GetCachedBG(int w, int h, void *owner_h
   return NULL;
 }
 
-LICE_IBitmap *WDL_VirtualWnd_BGCfgCache::SetCachedBG(int w, int h, LICE_IBitmap *bmCopy, void *owner_hint, const LICE_IBitmap *bgbmp)
+void WDL_VirtualWnd_BGCfgCache::SetCachedBG(int w, int h, LICE_IBitmap *bm, void *owner_hint, const LICE_IBitmap *bgbmp)
 {
-  if (w<1 || h<1 || w>65535 || h>65535) return NULL;
+  if (!bm || w<1 || h<1 || w>65535 || h>65535) return;
 
   WDL_PtrList<WDL_VirtualWnd_BGCfgCache_img> *cache = m_ar->m_cachelist.Get(bgbmp);
   if (!cache) 
@@ -1155,20 +1106,14 @@ LICE_IBitmap *WDL_VirtualWnd_BGCfgCache::SetCachedBG(int w, int h, LICE_IBitmap 
     if (bmcp->getWidth()==w && bmcp->getHeight()==h) img = new WDL_VirtualWnd_BGCfgCache_img((h<<16)+w,bmcp,now);
     else delete bmcp;
   }
-  else
-  {
-    if (img->bgimage) img->bgimage->resize(w,h);
-  }
 
   if (img)
   {
     img->lastowner = owner_hint;
-    if (bmCopy) LICE_Copy(img->bgimage, bmCopy);
-
-    cache->InsertSorted(img, WDL_VirtualWnd_BGCfgCache_img::compar);
-    return img->bgimage;
+    LICE_Copy(img->bgimage,bm);
+    cache->InsertSorted(img,WDL_VirtualWnd_BGCfgCache_img::compar);    
   }
-  return NULL;
+
 }
 
 void WDL_VirtualWnd_PreprocessBGConfig(WDL_VirtualWnd_BGCfg *a)
@@ -1463,13 +1408,13 @@ void WDL_VirtualWnd_ScaledBlitBG(LICE_IBitmap *dest,
   if (left_margin+right_margin>destw) 
   { 
     int w=left_margin+right_margin;
-    left_margin = destw*left_margin/wdl_max(w,1);
+    left_margin = destw*left_margin/max(w,1);
     right_margin=destw-left_margin; 
   }
   if (top_margin+bottom_margin>desth) 
   { 
     int h=(top_margin+bottom_margin);
-    top_margin=desth*top_margin/wdl_max(h,1);
+    top_margin=desth*top_margin/max(h,1);
     bottom_margin=desth-top_margin; 
   }
 
@@ -1613,13 +1558,13 @@ int WDL_VirtualWnd_ScaledBG_GetPix(WDL_VirtualWnd_BGCfg *src,
     if (left_margin+right_margin>destw) 
     { 
       int w=left_margin+right_margin;
-      left_margin = destw*left_margin/wdl_max(w,1);
+      left_margin = destw*left_margin/max(w,1);
       right_margin=destw-left_margin; 
     }
     if (top_margin+bottom_margin>desth) 
     { 
       int h=(top_margin+bottom_margin);
-      top_margin=desth*top_margin/wdl_max(h,1);
+      top_margin=desth*top_margin/max(h,1);
       bottom_margin=desth-top_margin; 
     }
 

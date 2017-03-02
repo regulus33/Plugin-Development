@@ -3,20 +3,6 @@
 
 #include "../ptrlist.h"
 
-class SWELL_ListView_Row
-{
-public:
-  SWELL_ListView_Row() : m_param(0), m_imageidx(0), m_tmp(0) { }
-  ~SWELL_ListView_Row() { m_vals.Empty(true,free); }
-  WDL_PtrList<char> m_vals;
-
-  LPARAM m_param;
-  int m_imageidx;
-  int m_tmp; // Cocoa uses this temporarily, generic uses it as a mask (1= selected)
-};
-
-struct HTREEITEM__;
-
 #ifdef SWELL_TARGET_OSX
 
 #if 0
@@ -54,7 +40,6 @@ struct HTREEITEM__;
 #define SWELL_ListViewCell __SWELL_PREFIX_CLASSNAME(_listviewcell)
 #define SWELL_ODListViewCell __SWELL_PREFIX_CLASSNAME(_ODlistviewcell)
 #define SWELL_ODButtonCell __SWELL_PREFIX_CLASSNAME(_ODbuttoncell)
-#define SWELL_ImageButtonCell __SWELL_PREFIX_CLASSNAME(_imgbuttoncell)
 
 #define SWELL_FocusRectWnd __SWELL_PREFIX_CLASSNAME(_drawfocusrectwnd)
 
@@ -114,6 +99,34 @@ typedef struct WindowPropRec
 } WindowPropRec;
 
 
+class SWELL_ListView_Row
+{
+public:
+  SWELL_ListView_Row();
+  ~SWELL_ListView_Row();
+  WDL_PtrList<char> m_vals;
+  LPARAM m_param;
+  int m_imageidx;
+  
+  int m_tmp;
+};
+
+
+struct HTREEITEM__
+{
+  HTREEITEM__();
+  ~HTREEITEM__();
+  bool FindItem(HTREEITEM it, HTREEITEM__ **parOut, int *idxOut);
+  
+  SWELL_DataHold *m_dh;
+  
+  bool m_haschildren;
+  char *m_value;
+  WDL_PtrList<HTREEITEM__> m_children; // only used in tree mode
+  LPARAM m_param;
+};
+
+
 
 @interface SWELL_TextField : NSTextField
 - (void)setNeedsDisplay:(BOOL)flag;
@@ -165,7 +178,6 @@ typedef struct WindowPropRec
   int m_start_item;
   int m_start_subitem;
   int m_start_item_clickmode;
-
   int m_lbMode;
   WDL_PtrList<SWELL_ListView_Row> *m_items;
   WDL_PtrList<NSTableColumn> *m_cols;
@@ -174,24 +186,14 @@ typedef struct WindowPropRec
   int m_fastClickMask;	
   NSColor *m_fgColor;
   NSMutableArray *m_selColors;
-
-  // these are for the new yosemite mouse handling code
-  int m_last_plainly_clicked_item, m_last_shift_clicked_item;
-
 }
 -(LONG)getSwellStyle;
 -(void)setSwellStyle:(LONG)st;
 -(int)getSwellNotificationMode;
 -(void)setSwellNotificationMode:(int)lbMode;
--(NSInteger)columnAtPoint:(NSPoint)pt;
+-(int)columnAtPoint:(NSPoint)pt;
 -(int)getColumnPos:(int)idx; // get current position of column that was originally at idx
 -(int)getColumnIdx:(int)pos; // get original index of column that is currently at position
-@end
-
-@interface SWELL_ImageButtonCell : NSButtonCell
-{
-}
-- (NSRect)drawTitle:(NSAttributedString *)title withFrame:(NSRect)frame inView:(NSView *)controlView;
 @end
 
 @interface SWELL_ODButtonCell : NSButtonCell
@@ -256,7 +258,7 @@ typedef struct WindowPropRec
 @interface SWELL_hwndChild : NSView // <NSDraggingSource>
 {
 @public
-  int m_enabled; // -1 if preventing focus
+  BOOL m_enabled;
   DLGPROC m_dlgproc;
   WNDPROC m_wndproc;
   LONG_PTR m_userdata;
@@ -276,7 +278,6 @@ typedef struct WindowPropRec
   unsigned int m_create_windowflags;
   NSOpenGLContext *m_glctx;
   char m_isdirty; // &1=self needs redraw, &2=children may need redraw
-  char m_allow_nomiddleman;
   id m_lastTopLevelOwner; // save a copy of the owner, if any
   id m_access_cacheptrs[6];
 }
@@ -315,19 +316,21 @@ typedef struct WindowPropRec
 // NSAccessibility
 
 // attribute methods
-//- (NSArray *)accessibilityAttributeNames;
+- (NSArray *)accessibilityAttributeNames;
 - (id)accessibilityAttributeValue:(NSString *)attribute;
-//- (BOOL)accessibilityIsAttributeSettable:(NSString *)attribute;
-//- (void)accessibilitySetValue:(id)value forAttribute:(NSString *)attribute;
+- (BOOL)accessibilityIsAttributeSettable:(NSString *)attribute;
+- (void)accessibilitySetValue:(id)value forAttribute:(NSString *)attribute;
 
 // parameterized attribute methods
-//- (NSArray *)accessibilityParameterizedAttributeNames;
-//- (id)accessibilityAttributeValue:(NSString *)attribute forParameter:(id)parameter;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_3
+- (NSArray *)accessibilityParameterizedAttributeNames;
+- (id)accessibilityAttributeValue:(NSString *)attribute forParameter:(id)parameter;
+#endif
 
 // action methods
-//- (NSArray *)accessibilityActionNames;
-//- (NSString *)accessibilityActionDescription:(NSString *)action;
-//- (void)accessibilityPerformAction:(NSString *)action;
+- (NSArray *)accessibilityActionNames;
+- (NSString *)accessibilityActionDescription:(NSString *)action;
+- (void)accessibilityPerformAction:(NSString *)action;
 
 // Return YES if the UIElement doesn't show up to the outside world - i.e. its parent should return the UIElement's children as its own - cutting the UIElement out. E.g. NSControls are ignored when they are single-celled.
 - (BOOL)accessibilityIsIgnored;
@@ -389,9 +392,6 @@ typedef struct WindowPropRec
 
 
 @interface SWELL_hwndCarbonHost : SWELL_hwndChild
-#ifdef MAC_OS_X_VERSION_10_7
-<NSWindowDelegate>
-#endif
 {
 @public
   NSWindow *m_cwnd;
@@ -442,25 +442,6 @@ typedef struct WindowPropRec
 
 // GDI internals
 
-#ifndef __AVAILABILITYMACROS__
-#error  __AVAILABILITYMACROS__ not defined, include AvailabilityMacros.h!
-#endif
-
-// 10.4 doesn't support CoreText, so allow ATSUI if targetting 10.4 SDK
-#ifndef MAC_OS_X_VERSION_10_5
-  // 10.4 SDK
-  #define SWELL_NO_CORETEXT
-  #define SWELL_ATSUI_TEXT_SUPPORT
-#else
-
-#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_5
-#ifndef __LP64__
-#define SWELL_ATSUI_TEXT_SUPPORT
-#endif
-#endif
-
-#endif
-
 struct HGDIOBJ__
 {
   int type;
@@ -472,19 +453,17 @@ struct HGDIOBJ__
   int wid;
   NSImage *bitmapptr;  
   
-  NSMutableDictionary *__old_fontdict; // unused, for ABI compat
-  //
-  // if ATSUI used, meaning IsCoreTextSupported() returned false
-  ATSUStyle atsui_font_style;
-
+  // used by font
+  // if using NSString to draw text
+  NSMutableDictionary *fontdict;
+  char font_quality;
+  // if using ATSU to draw text (faster)
+  ATSUStyle font_style;
+  
   float font_rotation;
 
   bool _infreelist;
   struct HGDIOBJ__ *_next;
- 
-  // if using CoreText to draw text
-  void *ct_FontRef;
-  char font_quality;
 };
 
 struct HDC__ {
@@ -494,7 +473,7 @@ struct HDC__ {
   HGDIOBJ__ *curbrush;
   HGDIOBJ__ *curfont;
   
-  NSColor *__old_nstextcol; // provided for ABI compat, but unused
+  NSColor *curtextcol; // text color as NSColor
   int cur_text_color_int; // text color as int
   
   int curbkcol;
@@ -504,8 +483,6 @@ struct HDC__ {
   void *GLgfxctx; // optionally set
   bool _infreelist;
   struct HDC__ *_next;
-
-  CGColorRef curtextcol; // text color as CGColor
 };
 
 
@@ -544,19 +521,12 @@ struct HDC__ {
 
 
 
-#else
-  // compat when compiling targetting OSX but not in objectiveC mode
-  struct SWELL_DataHold;
-#endif // !__OBJC__
+
+#endif // __OBJC__
 
 // 10.4 sdk just uses "float"
 #if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_4
-  #ifdef __LP64__
-    typedef double CGFloat;
-  #else
-    typedef float CGFloat;
-#endif
-
+typedef float CGFloat;
 #endif
 
 
@@ -570,42 +540,18 @@ struct HDC__ {
 
 #endif // end generic
 
-struct HTREEITEM__
-{
-  HTREEITEM__();
-  ~HTREEITEM__();
-  bool FindItem(HTREEITEM it, HTREEITEM__ **parOut, int *idxOut);
-  
-#ifdef SWELL_TARGET_OSX
-  SWELL_DataHold *m_dh;
-#else
-  int m_state; // TVIS_EXPANDED, for ex
-#endif
-  
-  bool m_haschildren;
-  char *m_value;
-  WDL_PtrList<HTREEITEM__> m_children; // only used in tree mode
-  LPARAM m_param;
-};
-
-
-
 #ifndef SWELL_TARGET_OSX 
-
-#include "../wdlstring.h"
 
 #ifdef SWELL_LICE_GDI
 #include "../lice/lice.h"
 #endif
 #include "../assocarray.h"
 
-#define SWELL_INTERNAL_MENUBAR_SIZE 12
-
 LRESULT SwellDialogDefaultWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 struct HWND__
 {
-  HWND__(HWND par, int wID=0, RECT *wndr=NULL, const char *label=NULL, bool visible=false, WNDPROC wndproc=NULL, DLGPROC dlgproc=NULL, HWND ownerWindow=NULL);
+  HWND__(HWND par, int wID=0, RECT *wndr=NULL, const char *label=NULL, bool visible=false, WNDPROC wndproc=NULL, DLGPROC dlgproc=NULL);
   ~HWND__(); // DO NOT USE!!! We would make this private but it breaks PtrList using it on gcc. 
 
   // using this API prevents the HWND from being valid -- it'll still get its resources destroyed via DestroyWindow() though.
@@ -622,12 +568,12 @@ struct HWND__
 #ifdef SWELL_TARGET_GDK
   GdkWindow *m_oswindow;
 #endif
-  WDL_FastString m_title;
+  char *m_title;
 
   HWND__ *m_children, *m_parent, *m_next, *m_prev;
-  HWND__ *m_owner, *m_owned_list, *m_owned_next, *m_owned_prev;
+  HWND__ *m_owner, *m_owned;
   RECT m_position;
-  UINT m_id;
+  int m_id;
   int m_style, m_exstyle;
   INT_PTR m_userdata;
   WNDPROC m_wndproc;
@@ -636,7 +582,7 @@ struct HWND__
   INT_PTR m_private_data; // used by internal controls
 
   bool m_visible;
-  char m_hashaddestroy; // 1 in destroy, 2 full destroy
+  bool m_hashaddestroy;
   bool m_enabled;
   bool m_wantfocus;
 
@@ -659,11 +605,10 @@ struct HWND__
 
 struct HMENU__
 {
-  HMENU__() { sel_vis = -1; }
+  HMENU__() { }
   ~HMENU__() { items.Empty(true,freeMenuItem); }
 
   WDL_PtrList<MENUITEMINFO> items;
-  int sel_vis; // for mouse/keyboard nav
 
   HMENU__ *Duplicate();
   static void freeMenuItem(void *p);
@@ -678,12 +623,8 @@ struct HGDIOBJ__
 
   int color;
   int wid;
-
-  float alpha;
-
   struct HGDIOBJ__ *_next;
   bool _infreelist;
-  void *typedata; // font: FT_Face, bitmap: LICE_IBitmap
 };
 
 
@@ -730,7 +671,6 @@ typedef struct
 
   int (*SWELL_dllMain)(HINSTANCE, DWORD,LPVOID); //last parm=SWELLAPI_GetFunc
   BOOL (*dllMain)(HINSTANCE, DWORD, LPVOID);
-  void *lastSymbolRequested;
 } SWELL_HINSTANCE;
 
 
@@ -799,48 +739,5 @@ typedef struct
 
 
 bool IsRightClickEmulateEnabled();
-
-#ifdef SWELL_INTERNAL_HTREEITEM_IMPL
-
-HTREEITEM__::HTREEITEM__()
-{
-  m_param=0;
-  m_value=0;
-  m_haschildren=false;
-#ifdef SWELL_TARGET_OSX
-  m_dh = [[SWELL_DataHold alloc] initWithVal:this];
-#else
-  m_state=0;
-#endif
-}
-HTREEITEM__::~HTREEITEM__()
-{
-  free(m_value);
-  m_children.Empty(true);
-#ifdef SWELL_TARGET_OSX
-  [m_dh release];
-#endif
-}
-
-
-bool HTREEITEM__::FindItem(HTREEITEM it, HTREEITEM__ **parOut, int *idxOut)
-{
-  int a=m_children.Find((HTREEITEM__*)it);
-  if (a>=0)
-  {
-    if (parOut) *parOut=this;
-    if (idxOut) *idxOut=a;
-    return true;
-  }
-  int x;
-  const int n=m_children.GetSize();
-  for (x = 0; x < n; x ++)
-  {
-    if (m_children.Get(x)->FindItem(it,parOut,idxOut)) return true;
-  }
-  return false;
-}
-
-#endif
 
 #endif

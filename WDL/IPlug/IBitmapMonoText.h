@@ -12,31 +12,16 @@ void DrawBitmapedText(IGraphics* pGraphics,
                       bool vCenter = true,
                       bool multiline = false,
                       int charWidth = 6,
-                      int charHeight = 12,
-                      int charOffset = 0);
-
-//TODO: fix Centre/Right aligned behaviour when string exceeds bounds or should wrap onto new line
+                      int charHeight = 12);
 
 class IBitmapTextControl : public IControl
 {
 public:
-  IBitmapTextControl(IPlugBase* pPlug,
-                     IRECT pR,
-                     IBitmap* pBitmap,
-                     const char* str = "",
-                     IText* pText = 0,
-                     int charWidth = 6,
-                     int charHeight = 12,
-                     int charOffset = 0,
-                     bool multiLine = false,
-                     bool vCenter = true)
-  : IControl(pPlug, pR)
-  , mTextBitmap(*pBitmap)
-  , mCharWidth(charWidth)
-  , mCharHeight(charHeight)
-  , mCharOffset(charOffset)
-  , mMultiLine(multiLine)
-  , mVCentre(vCenter)
+  IBitmapTextControl(IPlugBase* pPlug, IRECT pR, IBitmap* pBitmap, const char* str = "", IText* pText = 0, int charWidth = 6, int charHeight = 12)
+    : IControl(pPlug, pR)
+    , mTextBitmap(*pBitmap)
+    , mCharWidth(charWidth)
+    , mCharHeight(charHeight)
   {
     if (pText)
     {
@@ -59,10 +44,8 @@ public:
 
 protected:
   WDL_String mStr;
-  int mCharWidth, mCharHeight, mCharOffset;
+  int mCharWidth, mCharHeight;
   IBitmap mTextBitmap;
-  bool mMultiLine;
-  bool mVCentre;
 };
 
 #endif //_IBITMAPMONOTEXT_

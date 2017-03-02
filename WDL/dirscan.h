@@ -68,42 +68,37 @@ class WDL_DirScan
 #endif
      ) // returns 0 if success
     {
-      WDL_FastString scanstr(dirname);
-      const int l = scanstr.GetLength();
+      int l=strlen(dirname);
       if (l < 1) return -1;
 
+      WDL_String scanstr(dirname);
 #ifdef _WIN32
       if (!isExactSpec) 
-      {
-        if (dirname[l-1] == '\\' || dirname[l-1] == '/') scanstr.SetLen(l-1);
-        m_leading_path = scanstr;
-        scanstr.Append("\\*");
-      }
+#endif
+	 if (dirname[l-1] == '\\' || dirname[l-1] == '/')  scanstr.SetLen(l-1);
+   
+   m_leading_path.Set(scanstr.Get());
+
+#ifdef _WIN32
+      if (!isExactSpec) scanstr.Append("\\*");
       else
       {
-        m_leading_path = scanstr;
-
-        // remove trailing wildcards and directory separator from m_leading_path
-        const char *sp = m_leading_path.Get();
-        int idx = m_leading_path.GetLength() - 1;
-        while (idx > 0 && sp[idx] != '/' && sp[idx] != '\\') idx--;
-        if (idx > 0) m_leading_path.SetLen(idx);
+        // remove trailing stuff from m_leading_path
+        char *p=m_leading_path.Get();
+        while (*p) p++;
+        while (p > m_leading_path.Get() && *p != '/' && *p != '\\') p--;
+        if (p > m_leading_path.Get()) *p=0;
       }
 #else
-    	 if (dirname[l-1] == '\\' || dirname[l-1] == '/') scanstr.SetLen(l-1);
-      m_leading_path = scanstr;
-      if (!scanstr.GetLength()) scanstr.Set("/"); // fix for scanning /
+   if (l && !scanstr.Get()[0])
+     scanstr.Set("/"); // fix for scanning /
 #endif
 
       Close();
 #ifdef _WIN32
     #ifndef WDL_NO_SUPPORT_UTF8
       m_h=INVALID_HANDLE_VALUE;
-      #ifdef WDL_SUPPORT_WIN9X
       m_wcmode = GetVersion()< 0x80000000;
-      #else
-      m_wcmode = true;
-      #endif
 
       if (m_wcmode)
       {
@@ -160,7 +155,7 @@ class WDL_DirScan
     }
 
 #ifdef _WIN32
-    const char *GetCurrentFN() 
+    char *GetCurrentFN() 
     { 
 #ifndef WDL_NO_SUPPORT_UTF8
       if (m_wcmode)
@@ -173,9 +168,9 @@ class WDL_DirScan
       return ((WIN32_FIND_DATA *)&m_fd)->cFileName; 
     }
 #else
-    const char *GetCurrentFN() const { return m_ent?m_ent->d_name : ""; }
+    char *GetCurrentFN() { return m_ent?m_ent->d_name : (char *)""; }
 #endif
-    template<class T> void GetCurrentFullFN(T *str)
+    void GetCurrentFullFN(WDL_String *str) 
     { 
       str->Set(m_leading_path.Get()); 
 #ifdef _WIN32
@@ -185,64 +180,42 @@ class WDL_DirScan
 #endif
       str->Append(GetCurrentFN()); 
     }
-    int GetCurrentIsDirectory() const
-    { 
+    int GetCurrentIsDirectory() { 
 #ifdef _WIN32
        return !!(m_fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY); 
 #else
-#ifndef __APPLE__
-       // we could enable this on OSX, need to check to make sure realpath(x,NULL) is supported on 10.5+
-       if (m_ent && m_ent->d_type == DT_LNK)
-       {
-         char tmp[2048];
-         snprintf(tmp,sizeof(tmp),"%s/%s",m_leading_path.Get(),m_ent->d_name);
-         char *rp = realpath(tmp,NULL);
-         if (rp)
-         {
-           DIR *d = opendir(rp);
-           free(rp);
-
-           if (d)
-           {
-             closedir(d);
-             return 1;
-           }
-         }
-       }
-#endif
-       return m_ent && (m_ent->d_type == DT_DIR);
+       return m_ent && (m_ent->d_type & DT_DIR);
 #endif
     }
 
     // these are somewhat windows specific calls, eh
 #ifdef _WIN32
-    DWORD GetCurrentFileSize(DWORD *HighWord=NULL) const { if (HighWord) *HighWord = m_fd.nFileSizeHigh; return m_fd.nFileSizeLow; }
-    void GetCurrentLastWriteTime(FILETIME *ft) const { *ft = m_fd.ftLastWriteTime; }
-    void GetCurrentLastAccessTime(FILETIME *ft) const { *ft = m_fd.ftLastAccessTime; }
-    void GetCurrentCreationTime(FILETIME *ft) const { *ft = m_fd.ftCreationTime; }
-    DWORD GetFileAttributes() const { return m_fd.dwFileAttributes; }
+    DWORD GetCurrentFileSize(DWORD *HighWord=NULL) { if (HighWord) *HighWord = m_fd.nFileSizeHigh; return m_fd.nFileSizeLow; }
+    void GetCurrentLastWriteTime(FILETIME *ft) { *ft = m_fd.ftLastWriteTime; }
+    void GetCurrentLastAccessTime(FILETIME *ft) { *ft = m_fd.ftLastAccessTime; }
+    void GetCurrentCreationTime(FILETIME *ft) { *ft = m_fd.ftCreationTime; }
 #elif defined(_WDL_SWELL_H_)
 
   // todo: compat for more of these functions
   
-  void GetCurrentLastWriteTime(FILETIME *ft)
+  void GetCurrentLastWriteTime(FILETIME *ft) 
   { 
-    char tmp[2048];
-    snprintf(tmp,sizeof(tmp),"%s/%s",m_leading_path.Get(),GetCurrentFN());
+    WDL_String tmp;
+    GetCurrentFullFN(&tmp);
     struct stat st={0,};
-    stat(tmp,&st);
+    stat(tmp.Get(),&st);
     unsigned long long a=(unsigned long long)st.st_mtime; // seconds since january 1st, 1970
-    a+=11644473600ull; // 1601->1970
-    a*=10000000; // seconds to 1/10th microseconds (100 nanoseconds)
+    a+=((unsigned long long)(60*60*24*(365*4+1)/4))*(unsigned long long)(1970-1601); // this is approximate
+    a*=1000*10000; // seconds to 1/10th microseconds (100 nanoseconds)
     ft->dwLowDateTime=a & 0xffffffff;
     ft->dwHighDateTime=a>>32;
   }
-  DWORD GetCurrentFileSize(DWORD *HighWord=NULL)
+  DWORD GetCurrentFileSize(DWORD *HighWord=NULL) 
   { 
-    char tmp[2048];
-    snprintf(tmp,sizeof(tmp),"%s/%s",m_leading_path.Get(),GetCurrentFN());
+    WDL_String tmp;
+    GetCurrentFullFN(&tmp);
     struct stat st={0,};
-    stat(tmp,&st);
+    stat(tmp.Get(),&st);
     
     if (HighWord) *HighWord = (DWORD)(st.st_size>>32); 
     return (DWORD)(st.st_size&0xffffffff); 
@@ -265,7 +238,7 @@ class WDL_DirScan
     DIR *m_h;
     struct dirent *m_ent;
 #endif
-    WDL_FastString m_leading_path;
+    WDL_String m_leading_path;
 } WDL_FIXALIGN;
 
 #endif

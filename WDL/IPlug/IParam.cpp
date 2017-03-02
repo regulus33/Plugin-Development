@@ -2,21 +2,11 @@
 #include <stdio.h>
 
 IParam::IParam()
-  : mType(kTypeNone)
-  , mValue(0.0)
-  , mMin(0.0)
-  , mMax(1.0)
-  , mStep(1.0)
-  , mDisplayPrecision(0)
-  , mNegateDisplay(false)
-  , mShape(1.0)
-  , mCanAutomate(true)
-  , mDefault(0.)
-  , mIsMeta(false)
+  : mType(kTypeNone), mValue(0.0), mMin(0.0), mMax(1.0), mStep(1.0),
+    mDisplayPrecision(0), mNegateDisplay(false), mShape(1.0), mCanAutomate(true), mDefault(0.)
 {
   memset(mName, 0, MAX_PARAM_NAME_LEN * sizeof(char));
   memset(mLabel, 0, MAX_PARAM_LABEL_LEN * sizeof(char));
-  memset(mParamGroup, 0, MAX_PARAM_LABEL_LEN * sizeof(char));
 }
 
 IParam::~IParam() {}
@@ -45,7 +35,7 @@ void IParam::InitInt(const char* name, int defaultVal, int minVal, int maxVal, c
   InitDouble(name, (double) defaultVal, (double) minVal, (double) maxVal, 1.0, label, group);
 }
 
-void IParam::InitDouble(const char* name, double defaultVal, double minVal, double maxVal, double step, const char* label, const char* group, double shape)
+void IParam::InitDouble(const char* name, double defaultVal, double minVal, double maxVal, double step, const char* label, const char* group)
 {
   if (mType == kTypeNone) mType = kTypeDouble;
   
@@ -64,8 +54,6 @@ void IParam::InitDouble(const char* name, double defaultVal, double minVal, doub
   {
     ;
   }
-  
-  SetShape(shape);
 }
 
 void IParam::SetShape(double shape)
@@ -109,11 +97,6 @@ double IParam::GetNormalized(double nonNormalizedValue)
 {
   nonNormalizedValue = BOUNDED(nonNormalizedValue, mMin, mMax);
   return ToNormalizedParam(nonNormalizedValue, mMin, mMax, mShape);
-}
-
-double IParam::GetNonNormalized(double normalizedValue)
-{
-  return FromNormalizedParam(normalizedValue, mMin, mMax, mShape);
 }
 
 void IParam::GetDisplayForHost(double value, bool normalized, char* rDisplay, bool withDisplayText)

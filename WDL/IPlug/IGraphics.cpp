@@ -6,10 +6,6 @@
 // Only looked at if USE_IDLE_CALLS is defined.
 #define IDLE_TICKS 20
 
-#ifndef CONTROL_BOUNDS_COLOR
-  #define CONTROL_BOUNDS_COLOR COLOR_GREEN
-#endif
-
 class BitmapStorage
 {
 public:
@@ -161,7 +157,7 @@ inline int LiceBlendMode(const IChannelBlend* pBlend)
 }
 
 IGraphics::IGraphics(IPlugBase* pPlug, int w, int h, int refreshFPS)
-  : mPlug(pPlug)
+  :	mPlug(pPlug)
   , mWidth(w)
   , mHeight(h)
   , mIdleTicks(0)
@@ -178,8 +174,6 @@ IGraphics::IGraphics(IPlugBase* pPlug, int w, int h, int refreshFPS)
   , mCursorHidden(false)
   , mHiddenMousePointX(-1)
   , mHiddenMousePointY(-1)
-  , mEnableTooltips(false)
-  , mShowControlBounds(false)
 {
   mFPS = (refreshFPS > 0 ? refreshFPS : DEFAULT_FPS);
 }
@@ -355,32 +349,18 @@ void IGraphics::SetAllControlsDirty()
   }
 }
 
-void IGraphics::AssignParamNameToolTips()
-{
-  int i, n = mControls.GetSize();
-  IControl** ppControl = mControls.GetList();
-  for (i = 0; i < n; ++i, ++ppControl)
-  {
-    IControl* pControl = *ppControl;
-    if (pControl->ParamIdx() > -1)
-    {
-      pControl->SetTooltip(pControl->GetParam()->GetNameForHost());
-    }
-  }
-}
-
-void IGraphics::SetParameterFromGUI(int paramIdx, double normalizedValue)
-{
-  int i, n = mControls.GetSize();
-  IControl** ppControl = mControls.GetList();
-  for (i = 0; i < n; ++i, ++ppControl) {
-    IControl* pControl = *ppControl;
-    if (pControl->ParamIdx() == paramIdx) {
-      pControl->SetValueFromUserInput(normalizedValue);
-      // Could be more than one, don't break until we check them all.
-    }
-  }
-}
+//void IGraphics::SetParameterFromGUI(int paramIdx, double normalizedValue)
+//{
+//  int i, n = mControls.GetSize();
+//  IControl** ppControl = mControls.GetList();
+//  for (i = 0; i < n; ++i, ++ppControl) {
+//    IControl* pControl = *ppControl;
+//    if (pControl->ParamIdx() == paramIdx) {
+//      pControl->SetValueFromUserInput(normalizedValue);
+//      // Could be more than one, don't break until we check them all.
+//    }
+//  }
+//}
 
 void IGraphics::PromptUserInput(IControl* pControl, IParam* pParam, IRECT* pTextRect)
 {
@@ -390,7 +370,7 @@ void IGraphics::PromptUserInput(IControl* pControl, IParam* pParam, IRECT* pText
   int n = pParam->GetNDisplayTexts();
   char currentText[MAX_PARAM_LEN];
 
-  if ( type == IParam::kTypeEnum || (type == IParam::kTypeBool && n))
+  if ( type == IParam::kTypeEnum || type == IParam::kTypeBool && n)
   {
     pParam->GetDisplayForHost(currentText);
     IPopupMenu menu;
@@ -714,14 +694,6 @@ bool IGraphics::DrawRadialLine(const IColor* pColor, float cx, float cy, float a
 
 bool IGraphics::IsDirty(IRECT* pR)
 {
-#ifndef NDEBUG
-  if (mShowControlBounds)
-  {
-    *pR = mDrawRECT;
-    return true;
-  }
-#endif
-  
   bool dirty = false;
   int i, n = mControls.GetSize();
   IControl** ppControl = mControls.GetList();
@@ -824,22 +796,13 @@ bool IGraphics::Draw(IRECT* pR)
     }
   }
 
-#ifndef NDEBUG
-  if (mShowControlBounds) 
+  #ifdef SHOW_CONTROL_BOUNDARIES
+  for (int j = 1; j < mControls.GetSize(); j++)
   {
-    for (int j = 1; j < mControls.GetSize(); j++)
-    {
-      IControl* pControl = mControls.Get(j);
-      DrawRect(&CONTROL_BOUNDS_COLOR, pControl->GetRECT());
-    }
-    
-    WDL_String str;
-    str.SetFormatted(32, "x: %i, y: %i", mMouseX, mMouseY);
-    IText txt(20, &CONTROL_BOUNDS_COLOR);
-    IRECT rect(Width() - 150, Height() - 20, Width(), Height());
-    DrawIText(&txt, str.Get(), &rect);
+    IControl* pControl = mControls.Get(j);
+    DrawRect(&COLOR_RED, pControl->GetRECT());
   }
-#endif
+  #endif
 
   return DrawScreen(pR);
 }
@@ -894,13 +857,17 @@ void IGraphics::OnMouseDown(int x, int y, IMouseMod* pMod)
       }
     }
     #endif
+        
+    pControl->OnMouseDown(x, y, pMod);
     
+    // need to do these things again in case the mouse message caused a resize/rebuild
+    pControl = mControls.Get(c);
+    paramIdx = pControl->ParamIdx();
+
     if (paramIdx >= 0)
     {
       mPlug->BeginInformHostOfParamChange(paramIdx);
     }
-        
-    pControl->OnMouseDown(x, y, pMod);
   }
 }
 

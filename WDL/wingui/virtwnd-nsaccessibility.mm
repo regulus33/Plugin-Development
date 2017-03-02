@@ -29,8 +29,10 @@ class VWndBridgeNS;
 - (void)accessibilitySetValue:(id)value forAttribute:(NSString *)attribute;
 
 // parameterized attribute methods
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_3
 - (NSArray *)accessibilityParameterizedAttributeNames;
 - (id)accessibilityAttributeValue:(NSString *)attribute forParameter:(id)parameter;
+#endif
 
 // action methods
 - (NSArray *)accessibilityActionNames;
@@ -133,7 +135,7 @@ public:
 - (NSArray *)accessibilityAttributeNames
 {
   if (m_cached_attrnames) return m_cached_attrnames;
-  NSString *s[64];
+  NSString *s[32];
   int sidx=0;
   const char *type = NULL;
   if (m_br->vwnd)
@@ -179,18 +181,7 @@ public:
       hasState = ((WDL_VirtualIconButton*)m_br->vwnd)->GetCheckState()>=0;
     }
     else if (!strcmp(type,"vwnd_combobox")) hasState=true;
-    else if (!strcmp(type,"vwnd_slider"))
-    {
-      // eventually we could remove this check and just query GetAccessValueDesc() directly
-      // (but for now do not, because some controls may be plug-in created and not have the 
-      // updated base class)
-      s[sidx++] = NSAccessibilityValueDescriptionAttribute;
-      hasState=true;
-    }
-    else if (!strcmp(type,"vwnd_tabctrl_proxy"))
-    {
-      s[sidx++] = NSAccessibilityTabsAttribute;
-    }
+    else if (!strcmp(type,"vwnd_slider")) hasState=true;
 
     if (hasState)
     {
@@ -208,7 +199,6 @@ public:
 
 - (id)accessibilityAttributeValue:(NSString *)attribute
 {
-  char buf[2048];
   if (!m_br->vwnd) return nil;
   const char *type = m_br->vwnd->GetType();
   if (!type) type="";
@@ -217,11 +207,6 @@ public:
   
   int a = [attribute isEqual:NSAccessibilityChildrenAttribute]?1:0;
   if (!a) a= [attribute isEqual:NSAccessibilityVisibleChildrenAttribute]?2:0;
-  if (!a && !strcmp(type,"vwnd_tabctrl_proxy") && [attribute isEqual:NSAccessibilityTabsAttribute])
-  {
-    a=1;
-  }
-
   if (a) // if 2, only add visible items
   {
     int nc = m_br->vwnd->GetNumChildren();
@@ -315,8 +300,6 @@ public:
       if (!strcmp(type,"vwnd_statictext")) str = "text";
       else if (!strcmp(type,"vwnd_slider")) str = "slider";
       else if (!strcmp(type,"vwnd_combobox")) str = "selection box";
-      else if (!strcmp(type,"vwnd_tabctrl_proxy")) str = "tab list";
-      else if (!strcmp(type,"vwnd_tabctrl_child")) str = "tab";
       else if (!strcmp(type,"vwnd_iconbutton"))
       {
         WDL_VirtualIconButton *b = (WDL_VirtualIconButton *)m_br->vwnd;
@@ -332,7 +315,6 @@ public:
   {
     if (!strcmp(type,"vwnd_statictext")) return NSAccessibilityButtonRole; // fail: seems to need 10.5+ to deliver text? NSAccessibilityStaticTextRole;
     if (!strcmp(type,"vwnd_slider")) return NSAccessibilitySliderRole;
-    if (!strcmp(type,"vwnd_tabctrl_proxy")) return NSAccessibilityTabGroupRole; // bleh easiest way to get this to work
     if (!strcmp(type,"vwnd_combobox")) return NSAccessibilityPopUpButtonRole;
     if (!strcmp(type,"vwnd_iconbutton"))
     {
@@ -363,32 +345,33 @@ public:
       str = b->GetTextLabel();
       cs = b->GetCheckState();
     }
+    char buf[2048];
     if (!str || !*str) str= m_br->vwnd->GetAccessDesc();
     else
     {
       const char *p = m_br->vwnd->GetAccessDesc();
       if (p && *p)
       {
+        char buf[1024];
         sprintf(buf,"%.512s: %.512s",p,str);
         str=buf;
       }
     }
 
   
-#if 0
     if (cs>=0)
     {
       if (str!=buf)
       {
-        lstrcpyn(buf,str?str:"",sizeof(buf)-128);
+        lstrcpyn(buf,str,sizeof(buf)-128);
         str=buf;
       }
 //      strcat(buf,cs>0 ? " checked" : " unchecked");
       
     }
-#endif
     
     if (str && *str) return [(id)SWELL_CStringToCFString(str) autorelease];
+
   }
   if ([attribute isEqual:NSAccessibilityWindowAttribute])
   {
@@ -399,18 +382,6 @@ public:
     }
   }
   int s;
-  if ([attribute isEqual:NSAccessibilityValueDescriptionAttribute])
-  {
-    if (!strcmp(type,"vwnd_slider")) // eventually we can remove this check
-    {
-      WDL_VWnd *w = (WDL_VWnd *)m_br->vwnd;
-      buf[0]=0;
-      if (w->GetAccessValueDesc(buf,sizeof(buf)) && buf[0])
-      {
-        return [(id)SWELL_CStringToCFString(buf) autorelease];
-      }
-    }
-  }
   if ((s=!![attribute isEqual:NSAccessibilityMaxValueAttribute]) ||
        (s=[attribute isEqual:NSAccessibilityValueAttribute]?2:0) || 
         [attribute isEqual:NSAccessibilityMinValueAttribute])
@@ -508,11 +479,10 @@ public:
   {
     if (!strcmp(type,"vwnd_combobox") ||
         !strcmp(type,"vwnd_iconbutton") ||
-        !strcmp(type,"vwnd_tabctrl_child") ||
         !strcmp(type,"vwnd_statictext") 
         ) s[sidx++] =  NSAccessibilityPressAction;
     
-    if (!strcmp(type,"vwnd_slider"))
+    if (!strcmp(type,"vwnd_slider")) 
     {
       s[sidx++] = NSAccessibilityDecrementAction;
       s[sidx++] = NSAccessibilityIncrementAction;
@@ -536,7 +506,6 @@ public:
       if (!strcmp(type,"vwnd_combobox")) return @"Choose item";
       if (!strcmp(type,"vwnd_iconbutton")) return @"Press button";
       if (!strcmp(type,"vwnd_statictext")) return @"Doubleclick text";
-      if (!strcmp(type,"vwnd_tabctrl_child")) return @"Select tab";
     }
     else if (!strcmp(type,"vwnd_slider")) 
     {
@@ -565,11 +534,11 @@ public:
     }
     else if ([action isEqual:NSAccessibilityDecrementAction])
     {
-      m_br->vwnd->OnMouseWheel(-100,-100,-1);
+      m_br->vwnd->OnMouseWheel(0,0,-1);
     }
     else if ([action isEqual:NSAccessibilityIncrementAction])
     {
-      m_br->vwnd->OnMouseWheel(-100,-100,1);
+      m_br->vwnd->OnMouseWheel(0,0,1);
     }
     //NSLog(@"accessibilityPerformAction: %@ %s %p\n",action,type,m_br->vwnd);
   }  

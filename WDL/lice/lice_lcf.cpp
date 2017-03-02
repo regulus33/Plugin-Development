@@ -93,7 +93,7 @@ void LICECaptureCompressor::OnFrame(LICE_IBitmap *fr, int delta_t_ms)
       for(i=0;i<list_size; i++)
       {
         unsigned short *rd = list[i]->data + rdoffs;
-        if (i&&repeat_cnt<255)
+        if (i&&repeat_cnt<256)
         {
           unsigned short *rd1=rd;
           unsigned short *rd2=list[i-1]->data+rdoffs;
@@ -294,7 +294,6 @@ LICECaptureCompressor::~LICECaptureCompressor()
 
 LICECaptureDecompressor::LICECaptureDecompressor(const char *fn, bool want_seekable) : m_workbm(0,0,1)
 {
-  m_bytes_read=0;
   m_file_length_ms=0;
   m_rd_which=0;
   m_frameidx=0;
@@ -315,18 +314,11 @@ LICECaptureDecompressor::LICECaptureDecompressor(const char *fn, bool want_seeka
       if (want_seekable)
       {
         unsigned int lastpos = 0;
-        int first_frame_delay = 0;
         while (ReadHdr(0))
         {
           m_file_frame_info.Add(&lastpos,1);
           unsigned int mst = m_file_length_ms;
-          if (m_frame_deltas[0].GetSize()) 
-          {
-            if (lastpos > 0)
-              mst += m_frame_deltas[0].Get()[0]-first_frame_delay; // TOC is by time of first frames, ignore first delay when seeking
-            else
-              first_frame_delay = m_frame_deltas[0].Get()[0];
-          }
+          if (m_frame_deltas[0].GetSize()) mst += m_frame_deltas[0].Get()[0]; // TOC is by time of first frames, ignore first delay when seeking
           m_file_frame_info.Add(&mst,1);         
 
           int x;
@@ -440,8 +432,7 @@ bool LICECaptureDecompressor::ReadHdr(int whdr) // todo: eventually make this re
   m_tmp.Clear();
   int hdr_sz = (4*9);
   if (m_file->Read(m_tmp.Add(NULL,hdr_sz),hdr_sz)!=hdr_sz) return false;
-  m_bytes_read+=hdr_sz;
-  int ver=0;
+  int ver;
   m_tmp.GetTFromLE(&ver);
   if (ver !=LCF_VERSION) return false;
   m_tmp.GetTFromLE(&m_curhdr[whdr].bpp);
@@ -449,12 +440,12 @@ bool LICECaptureDecompressor::ReadHdr(int whdr) // todo: eventually make this re
   m_tmp.GetTFromLE(&m_curhdr[whdr].h);
   m_tmp.GetTFromLE(&m_curhdr[whdr].bsize_w);
   m_tmp.GetTFromLE(&m_curhdr[whdr].bsize_h);
-  int nf=0;
+  int nf;
   m_tmp.GetTFromLE(&nf);
-  int csize=0;
+  int csize;
   m_tmp.GetTFromLE(&csize);
 
-  int dsize=0;
+  int dsize;
   m_tmp.GetTFromLE(&dsize);
   
   if (nf<1 || nf > 1024) return false;
@@ -464,7 +455,6 @@ bool LICECaptureDecompressor::ReadHdr(int whdr) // todo: eventually make this re
   if (m_frame_deltas[whdr].GetSize()!=nf) return false;
 
   if (m_file->Read(m_frame_deltas[whdr].Get(),nf*4)!=nf*4) return false;
-  m_bytes_read+=nf*4;
   int x;
   for(x=0;x<nf;x++)
   {
@@ -485,7 +475,6 @@ bool LICECaptureDecompressor::DecompressBlock(int whdr, double percent)
 {
   if (m_compstream.avail_out) 
   {
-    unsigned char buf[16384];
     for (;;)
     {
       if (percent<1.0&&m_decompdata[whdr].GetSize())
@@ -493,12 +482,12 @@ bool LICECaptureDecompressor::DecompressBlock(int whdr, double percent)
         double p =  ((m_decompdata[whdr].GetSize()-m_compstream.avail_out)/(double)m_decompdata[whdr].GetSize());
         if (p>percent) break;
       }
+      unsigned char buf[16384];
       m_compstream.next_in = buf;
       m_compstream.avail_in = m_curhdr[whdr].cdata_left;
       if (m_compstream.avail_in > (int)sizeof(buf)) m_compstream.avail_in=(int)sizeof(buf);
 
       m_compstream.avail_in = m_file->Read(buf,m_compstream.avail_in);
-      m_bytes_read+=m_compstream.avail_in;
       m_curhdr[whdr].cdata_left -= m_compstream.avail_in;
 
       int e = inflate(&m_compstream,0);
@@ -509,7 +498,6 @@ bool LICECaptureDecompressor::DecompressBlock(int whdr, double percent)
       }   
       if (!m_compstream.avail_out && !m_compstream.avail_in) break;
     }
-    m_compstream.next_in = NULL;
   }
 
   return true;
@@ -644,6 +632,8 @@ LICE_IBitmap *LICECaptureDecompressor::GetCurrentFrame()
         {
           int wid  = totw-xpos;
           if (wid>hdr->bsize_w) wid=hdr->bsize_w;
+
+          int sz1=wid*hei;
 
           unsigned short *rdptr = (unsigned short *)*sliceptr;
 

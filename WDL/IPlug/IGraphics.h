@@ -101,13 +101,6 @@ public:
   virtual void HostPath(WDL_String* pPath) = 0;   // Full path to host executable.
   virtual void PluginPath(WDL_String* pPath) = 0; // Full path to plugin dll.
   virtual void DesktopPath(WDL_String* pPath) = 0; // Full path to user's desktop.
-
-  //Windows7: %LOCALAPPDATA%\
-  //Windows XP/Vista: %USERPROFILE%\Local Settings\Application Data\
-  //OSX: ~/Library/Application Support/
-  virtual void AppSupportPath(WDL_String* pPath, bool isSystem = false) = 0;
-  virtual void SandboxSafeAppSupportPath(WDL_String* pPath) = 0;
-
   // Run the "open file" or "save file" dialog.  Default to host executable path.
   virtual void PromptForFile(WDL_String* pFilename, EFileAction action = kFileOpen, WDL_String* pDir = 0, char* extensions = 0) = 0;  // extensions = "txt wav" for example.
   virtual bool PromptForColor(IColor* pColor, char* prompt = 0) = 0;
@@ -129,8 +122,6 @@ public:
 
   virtual void CloseWindow() = 0;
   virtual void* GetWindow() = 0;
-
-  virtual bool GetTextFromClipboard(WDL_String* pStr) = 0;
 
   ////////////////////////////////////////
 
@@ -163,12 +154,12 @@ public:
   void SetParameterFromPlug(int paramIdx, double value, bool normalized);
   // For setting a control that does not have a parameter associated with it.
   void SetControlFromPlug(int controlIdx, double normalizedValue);
-  
+
   void SetAllControlsDirty();
 
   // This is for when the gui needs to change a control value that it can't redraw
   // for context reasons.  If the gui has redrawn the control, use IPlug::SetParameterFromGUI.
-  void SetParameterFromGUI(int paramIdx, double normalizedValue);
+//  void SetParameterFromGUI(int paramIdx, double normalizedValue);
 
   // Convenience wrappers.
   bool DrawBitmap(IBitmap* pBitmap, IRECT* pR, int bmpState = 1, const IChannelBlend* pBlend = 0);
@@ -207,27 +198,9 @@ public:
   // Some controls may not need to capture the mouse for dragging, they can call ReleaseCapture when the mouse leaves.
   void ReleaseMouseCapture();
 
-  // Enables/disables tooltips; also enables mouseovers/mouseouts if necessary.
-  void EnableTooltips(bool enable)
-  {
-    mEnableTooltips = enable;
-    if (enable) mHandleMouseOver = enable;
-  }
-  
-  void AssignParamNameToolTips();
-  
-  // in debug builds you can enable this to draw a coloured box on the top of the GUI to show the bounds of the IControls
-  inline void ShowControlBounds(bool enable)
-  {
-    mShowControlBounds = enable;
-  }
-
-  // Updates tooltips after (un)hiding controls.
-  virtual void UpdateTooltips() = 0;
-
-	// This is an idle call from the GUI thread, as opposed to 
-	// IPlug::OnIdle which is called from the audio processing thread.
-	void OnGUIIdle();
+  // This is an idle call from the GUI thread, as opposed to
+  // IPlug::OnIdle which is called from the audio processing thread.
+  void OnGUIIdle();
 
   void RetainBitmap(IBitmap* pBitmap);
   void ReleaseBitmap(IBitmap* pBitmap);
@@ -252,13 +225,7 @@ protected:
   int mHiddenMousePointX, mHiddenMousePointY;
 
   bool CanHandleMouseOver() { return mHandleMouseOver; }
-  inline int GetMouseOver() const { return mMouseOver; }
-  inline int GetMouseX() const { return mMouseX; }
-  inline int GetMouseY() const { return mMouseY; }
-  inline bool TooltipsEnabled() const { return mEnableTooltips; }
-  
   virtual LICE_IBitmap* OSLoadBitmap(int ID, const char* name) = 0;
-  
   LICE_SysBitmap* mDrawBitmap;
   LICE_IFont* CacheFont(IText* pTxt);
   
@@ -271,7 +238,7 @@ private:
   int mWidth, mHeight, mFPS, mIdleTicks;
   int GetMouseControlIdx(int x, int y, bool mo = false);
   int mMouseCapture, mMouseOver, mMouseX, mMouseY, mLastClickedParam;
-  bool mHandleMouseOver, mStrict, mEnableTooltips, mShowControlBounds;
+  bool mHandleMouseOver, mStrict;
   IControl* mKeyCatcher;
 };
 

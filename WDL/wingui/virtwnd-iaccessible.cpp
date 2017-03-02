@@ -17,9 +17,8 @@
 static BSTR SysAllocStringUTF8(const char *str)
 {
   WCHAR tmp[1024];
-  const int slen = (int)strlen(str)+1;
+  int slen = strlen(str)+1;
   WCHAR *wstr = slen < 1000 ? tmp : (WCHAR*)malloc(2*slen+32);
-  if (!wstr) return NULL;
 
   wstr[0]=0;
   int a=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,str,slen,wstr, slen<1000?1024:slen+16);
@@ -41,40 +40,6 @@ public:
   VWndBridge() { }
   ~VWndBridge() { }
   virtual void Release() {  vwnd=0; }
-
-  virtual void OnFocused()
-  {
-    DoNotify(EVENT_OBJECT_FOCUS);
-  }
-  virtual void OnStateChange() 
-  {
-    DoNotify(EVENT_OBJECT_VALUECHANGE);
-  }
-  void DoNotify(int mode)
-  {
-    if (vwnd)
-    {
-      HWND hwnd = vwnd->GetRealParent();
-      if (hwnd)
-      {
-        int idx = CHILDID_SELF;
-        WDL_VWnd *lpar = vwnd, *par = NULL;
-        // todo: better handle hierarchy?
-        if (lpar) while ((par=lpar->GetParent()))
-        {
-          if (!par->GetParent()) break;
-          lpar=par;
-        }
-        if (par)
-        {
-          for (idx=0; idx < par->GetNumChildren(); idx++) if (par->EnumChildren(idx)==lpar) break;
-          if (idx >= par->GetNumChildren()) idx = CHILDID_SELF;
-          else idx++;
-        }
-        NotifyWinEvent(mode,hwnd,OBJID_CLIENT,idx); 
-      }
-    }
-  }
 
   CVWndAccessible *par;
   WDL_VWnd *vwnd;
@@ -117,15 +82,15 @@ public:
   {
     if (IsEqualIID(riid, IID_IUnknown))
     {
-      *ppObj = (IUnknown*)this;
+      *ppObj = this;
     }
     else if (IsEqualIID(riid, IID_IAccessible))
     {
-      *ppObj = (IAccessible*)this;
+      *ppObj = this;
     }
     else if (IsEqualIID(riid, IID_IDispatch))
     {
-      *ppObj = (IDispatch*)this;
+      *ppObj = this;
     }
     else
     {
@@ -170,11 +135,11 @@ public:
   STDMETHOD(GetTypeInfoCount)(unsigned int FAR* pctinfo )
   {
     *pctinfo=0;
-    return E_NOTIMPL;
+    return NOERROR;
   }
   STDMETHOD(GetTypeInfo)(unsigned int iTInfo, LCID lcid, ITypeInfo FAR* FAR* ppTInfo)
   {
-    return E_NOTIMPL;
+    return S_OK;
   }
   STDMETHOD( GetIDsOfNames)( 
     REFIID riid, 
@@ -185,7 +150,7 @@ public:
   )
   {
     *rgDispId=0;
-    return E_NOTIMPL;
+    return E_OUTOFMEMORY;
   }
 
   STDMETHOD(Invoke)( 
@@ -199,7 +164,7 @@ public:
     unsigned int FAR* puArgErr 
   )
   {
-    return E_NOTIMPL;
+    return DISP_E_BADPARAMCOUNT;
   }
 
   // IAccessible
@@ -215,18 +180,6 @@ public:
     }
 
     *ppdispParent = NULL;
-
-    if (__CreateStdAccessibleObject)
-    {
-      HWND realparent = m_br.vwnd->GetRealParent();
-      if (realparent)
-      {
-        HRESULT res = __CreateStdAccessibleObject(realparent,OBJID_WINDOW,IID_IAccessible,(void**)ppdispParent); // should this be OBJID_CLIENT?
-        if (SUCCEEDED(res))
-          return S_OK;
-      }
-    }
-
     return S_FALSE;
   }
 #define ISVWNDLIST(x) ((x)&&!strcmp((x)->GetType(),"vwnd_listbox"))
@@ -329,19 +282,16 @@ public:
       if (p && *p && txt && *txt)
       {
         char buf[1024];
-        snprintf(buf,sizeof(buf),"%.500s %.500s",p,txt);
+        sprintf(buf,"%.500s %.500s",p,txt);
         *pszOut= SysAllocStringUTF8(buf);
-        if (!*pszOut) return E_OUTOFMEMORY;
       }
       else if (txt && *txt)
       {
         *pszOut= SysAllocStringUTF8(txt);
-        if (!*pszOut) return E_OUTOFMEMORY;
       }
       else if (p && *p)
       {
         *pszOut = SysAllocStringUTF8(p);
-        if (!*pszOut) return E_OUTOFMEMORY;
       }
     }
     else if (ISVWNDLIST(m_br.vwnd))
@@ -370,10 +320,7 @@ public:
 
 //          OutputDebugString(buf);
         if (buf[0])
-        {
           *pszOut = SysAllocStringUTF8(buf);
-          if (!*pszOut) return E_OUTOFMEMORY;
-        }
       }
     }
     return S_OK;
@@ -385,18 +332,6 @@ public:
     if (!m_br.vwnd || varChild.vt != VT_I4) 
     {
       return E_INVALIDARG;
-    }
-    WDL_VWnd *vw = varChild.lVal == CHILDID_SELF ? m_br.vwnd : m_br.vwnd->EnumChildren(varChild.lVal-1);
-    if (vw && !strcmp(vw->GetType(),"vwnd_slider"))
-    {
-      char buf[1024];
-      buf[0]=0;
-      if (vw->GetAccessValueDesc(buf,sizeof(buf)) && buf[0])
-      {
-        *pszValue = SysAllocStringUTF8(buf);
-        if (!*pszValue) return E_OUTOFMEMORY;
-        return S_OK;
-      }
     }
     return DISP_E_MEMBERNOTFOUND;
   }
@@ -410,6 +345,25 @@ public:
     WDL_VWnd *vw = varChild.lVal == CHILDID_SELF ? m_br.vwnd : m_br.vwnd->EnumChildren(varChild.lVal-1);
     if (vw) 
     {
+      char buf[1024];
+      buf[0]=0;
+      WDL_VWnd *p = vw->GetParent();
+      if (0)  // disabled for now
+        while (p && strlen(buf)<800)
+      {
+        const char *txt= p->GetAccessDesc();
+        if (txt && *txt) 
+        {
+          if (buf[0]) strcat(buf," ");
+          lstrcpyn_safe(buf+strlen(buf),txt,200);
+        }
+        p=p->GetParent();
+      }
+      if (buf[0])
+      {
+        *pszOut = SysAllocStringUTF8(buf);
+        return S_OK;
+      }
       return S_FALSE;
     }
     else if (ISVWNDLIST(m_br.vwnd))
@@ -421,7 +375,6 @@ public:
         if (txt)
         {
           *pszOut = SysAllocStringUTF8(txt);
-          if (!*pszOut) return E_OUTOFMEMORY;
           return S_OK;
         }
       }
@@ -467,27 +420,29 @@ public:
     }
 
     pvarRole->vt = VT_I4;
-    const char *type = vw->GetType();
-
-    if (!strcmp(type,"vwnd_iconbutton")) 
+    if (vw->GetNumChildren()) pvarRole->lVal =  ROLE_SYSTEM_GROUPING;
+    else
     {
-      WDL_VirtualIconButton *vb = (WDL_VirtualIconButton*)vw;
-      if (vb->GetIsButton())
+
+      const char *type = vw->GetType();
+    
+      if (!strcmp(type,"vwnd_iconbutton")) 
       {
-        if (vb->GetCheckState()>=0) pvarRole->lVal = ROLE_SYSTEM_CHECKBUTTON;
-        else pvarRole->lVal = ROLE_SYSTEM_PUSHBUTTON;
+        WDL_VirtualIconButton *vb = (WDL_VirtualIconButton*)vw;
+        if (vb->GetIsButton())
+        {
+          if (vb->GetCheckState()>=0) pvarRole->lVal = ROLE_SYSTEM_CHECKBUTTON;
+          else pvarRole->lVal = ROLE_SYSTEM_PUSHBUTTON;
+        }
+        else
+          pvarRole->lVal = ROLE_SYSTEM_STATICTEXT;       
       }
-      else
-        pvarRole->lVal = ROLE_SYSTEM_STATICTEXT;       
+      else if (!strcmp(type,"vwnd_statictext"))  pvarRole->lVal = ROLE_SYSTEM_STATICTEXT;
+      else if (!strcmp(type,"vwnd_combobox"))  pvarRole->lVal = ROLE_SYSTEM_COMBOBOX;
+      else if (!strcmp(type,"vwnd_slider"))  pvarRole->lVal = ROLE_SYSTEM_SLIDER;
+      else if (!strcmp(type,"vwnd_listbox"))  pvarRole->lVal = ROLE_SYSTEM_LIST;
+      else pvarRole->lVal=ROLE_SYSTEM_CLIENT;
     }
-    else if (!strcmp(type,"vwnd_statictext"))  pvarRole->lVal = ROLE_SYSTEM_STATICTEXT;
-    else if (!strcmp(type,"vwnd_combobox"))  pvarRole->lVal = ROLE_SYSTEM_COMBOBOX;
-    else if (!strcmp(type,"vwnd_slider"))  pvarRole->lVal = ROLE_SYSTEM_SLIDER;
-    else if (!strcmp(type,"vwnd_tabctrl_proxy"))  pvarRole->lVal = ROLE_SYSTEM_PAGETABLIST;
-    else if (!strcmp(type,"vwnd_tabctrl_child"))  pvarRole->lVal = ROLE_SYSTEM_PAGETAB;
-    else if (!strcmp(type,"vwnd_listbox"))  pvarRole->lVal = ROLE_SYSTEM_LIST;
-    else if (vw->GetNumChildren()) pvarRole->lVal =  ROLE_SYSTEM_GROUPING;
-    else pvarRole->lVal=ROLE_SYSTEM_CLIENT;
 
     return S_OK;
   }
@@ -627,24 +582,10 @@ public:
     }
     WDL_VWnd *vw = varChild.lVal == CHILDID_SELF ? m_br.vwnd : m_br.vwnd->EnumChildren(varChild.lVal-1);
 
-    if (!vw) return E_INVALIDARG;
-
-    const char *type = vw->GetType();
-    if (type)
+    if (!vw) 
     {
-      const char *str=NULL;
-      if (!strcmp(type,"vwnd_combobox")) str = "Activate";
-      else if (!strcmp(type,"vwnd_iconbutton")) str="Click";
-      else if (!strcmp(type,"vwnd_tabctrl_child")) str="Select";
-      else if (!strcmp(type,"vwnd_statictext")) str="Click";
-      if (str)
-      {
-        *pszDefaultAction = SysAllocStringUTF8(str);
-        if (!*pszDefaultAction) return E_OUTOFMEMORY;
-        return S_OK;
-      }
+      return E_INVALIDARG;
     }
-
     return S_FALSE;
   }
 
@@ -726,93 +667,7 @@ public:
 
   STDMETHOD(accNavigate)(THIS_ long navDir, VARIANT varStart, VARIANT * pvarEndUpAt) 
   {
-    if (!pvarEndUpAt) return E_INVALIDARG;
-
-    if (!m_br.vwnd || varStart.vt != VT_I4) 
-    {
-      return DISP_E_MEMBERNOTFOUND;
-    }
-    pvarEndUpAt->vt = VT_I4;
-    pvarEndUpAt->lVal = VT_EMPTY;
-
-    WDL_VWnd *vw = varStart.lVal == CHILDID_SELF ? m_br.vwnd : m_br.vwnd->EnumChildren(varStart.lVal-1);
-    if (!vw) return S_FALSE;
-
-    if (navDir == NAVDIR_FIRSTCHILD || navDir == NAVDIR_LASTCHILD)
-    {
-      int n = vw->GetNumChildren();
-      if (ISVWNDLIST(vw))
-      {
-        WDL_VirtualListBox *list=(WDL_VirtualListBox*)m_br.vwnd;
-        if (list->m_GetItemInfo) n += list->m_GetItemInfo(list,-1,NULL,0,NULL,NULL);
-      }
-
-      if (n<1) return S_FALSE;
-      pvarEndUpAt->vt = VT_I4;
-      pvarEndUpAt->lVal = navDir == NAVDIR_FIRSTCHILD ? 1 : n;
-      return S_OK;
-    }
-
-    if (navDir == NAVDIR_NEXT || navDir == NAVDIR_PREVIOUS)
-    {
-      if (varStart.lVal != CHILDID_SELF)
-      {
-        int n = m_br.vwnd->GetNumChildren();
-        if (ISVWNDLIST(m_br.vwnd))
-        {
-          WDL_VirtualListBox *list=(WDL_VirtualListBox*)m_br.vwnd;
-          if (list->m_GetItemInfo) n += list->m_GetItemInfo(list,-1,NULL,0,NULL,NULL);
-        }
-        int x = varStart.lVal - 1;
-        if (navDir == NAVDIR_NEXT)
-        {
-          if (++x >= n) return S_FALSE;
-        }
-        else
-        {
-          if (--x<0) return S_FALSE;
-        }
-        pvarEndUpAt->vt = VT_I4;
-        pvarEndUpAt->lVal = 1 + x;
-        return S_OK;
-      }
-
-      // passed CHILDID_SELF, need to scan to find index
-      WDL_VWnd *par = vw->GetParent();
-      if (par)
-      {
-        const int n = par->GetNumChildren();
-        int x;
-        for (x=0;x < n;x++) 
-        {
-          WDL_VWnd *c = par->EnumChildren(x);
-          if (c == vw) 
-          {
-            if (navDir == NAVDIR_NEXT) x++;
-            else x--;
-
-            WDL_VWnd *hit = par->EnumChildren(x);
-            if (!hit) break;
-
-            IAccessible *pac = GetVWndIAccessible(hit);
-            if (pac)
-            {
-              pvarEndUpAt->vt = VT_DISPATCH;
-              pvarEndUpAt->pdispVal = (IDispatch *)pac;
-            }
-            else
-            {
-              pvarEndUpAt->vt = VT_I4;
-              pvarEndUpAt->lVal = 1 + x;
-            }
-            return S_OK;
-          }
-        }
-      }
-      return S_FALSE;
-    }
-
-    return E_INVALIDARG;
+    return DISP_E_MEMBERNOTFOUND;
   }
   STDMETHOD(accHitTest)(THIS_ long xLeft, long yTop, VARIANT * pvarChildAtPoint) 
   {
@@ -896,33 +751,7 @@ public:
   }
   STDMETHOD(accDoDefaultAction)(THIS_ VARIANT varChild) 
   {
-    if (!m_br.vwnd || varChild.vt != VT_I4) 
-    {
-      return E_INVALIDARG;
-    }
-    WDL_VWnd *vw = varChild.lVal == CHILDID_SELF ? m_br.vwnd : m_br.vwnd->EnumChildren(varChild.lVal-1);
-
-    if (!vw) return E_INVALIDARG;
-
-    const char *type = vw->GetType();
-    if (type)
-    {
-      if (!strcmp(type,"vwnd_combobox") ||
-          !strcmp(type,"vwnd_iconbutton") ||
-          !strcmp(type,"vwnd_tabctrl_child"))
-      {
-        vw->OnMouseDown(0,0);
-        vw->OnMouseUp(0,0);      
-        return S_OK;
-      }
-      else if (!strcmp(type,"vwnd_statictext"))
-      {
-        vw->OnMouseDblClick(0,0);
-        return S_OK;
-      }
-    }
-
-    return S_FALSE;
+    return DISP_E_MEMBERNOTFOUND;
   }
 
     STDMETHOD(put_accName)(THIS_ VARIANT varChild, BSTR szName) 
@@ -1009,6 +838,7 @@ LRESULT WDL_AccessibilityHandleForVWnd(bool isDialog, HWND hwnd, WDL_VWnd *vw, W
   return 0;
 }
 
+
 #else
 
 #ifdef _WIN32
@@ -1017,7 +847,6 @@ LRESULT WDL_AccessibilityHandleForVWnd(bool isDialog, HWND hwnd, WDL_VWnd *vw, W
 #include "../swell/swell.h"
 #endif 
 
-#include "virtwnd.h"
 
 #ifdef __APPLE__
 
@@ -1025,6 +854,8 @@ LRESULT WDL_AccessibilityHandleForVWnd(bool isDialog, HWND hwnd, WDL_VWnd *vw, W
 
 #else
 
+
+class WDL_VWnd;
 LRESULT WDL_AccessibilityHandleForVWnd(bool isDialog, HWND hwnd, WDL_VWnd *vw, WPARAM wParam, LPARAM lParam)
 {
   return 0;

@@ -3,7 +3,6 @@
 #include "Log.h"
 #include <wininet.h>
 #include <Shlobj.h>
-#include <commctrl.h>
 
 #ifdef RTAS_API
   #include "PlugInUtils.h"
@@ -30,23 +29,19 @@ enum EParamEditMsg
 
 #define IPLUG_TIMER_ID 2
 
+#ifdef RTAS_API
 inline IMouseMod GetMouseMod(WPARAM wParam)
 {
-  return IMouseMod((wParam & MK_LBUTTON), 
-                   (wParam & MK_RBUTTON),
-                   (wParam & MK_SHIFT), 
-                   (wParam & MK_CONTROL), 
-                   
-#ifdef RTAS_API
-                   IsOptionKeyDown()
-#elif defined(AAX_API)
-                   GetAsyncKeyState(VK_MENU) < 0
-#else
-                   GetKeyState(VK_MENU) < 0
-#endif
-                   );
+  return IMouseMod((wParam & MK_LBUTTON), (wParam & MK_RBUTTON),
+                   (wParam & MK_SHIFT), (wParam & MK_CONTROL), IsOptionKeyDown());
 }
-
+#else
+inline IMouseMod GetMouseMod(WPARAM wParam)
+{
+  return IMouseMod((wParam & MK_LBUTTON), (wParam & MK_RBUTTON),
+                   (wParam & MK_SHIFT), (wParam & MK_CONTROL), GetKeyState(VK_MENU) < 0);
+}
+#endif
 // static
 LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -162,11 +157,20 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
     case WM_RBUTTONDOWN:
     case WM_LBUTTONDOWN:
     case WM_MBUTTONDOWN:
-      pGraphics->HideTooltip();
+
       if (pGraphics->mParamEditWnd)
       {
-        pGraphics->mParamEditMsg = kCommit;
-        return 0;
+        SetWindowLongPtr(pGraphics->mParamEditWnd, GWLP_WNDPROC, (LPARAM) pGraphics->mDefEditProc);
+        DestroyWindow(pGraphics->mParamEditWnd);
+        pGraphics->mParamEditWnd = 0;
+        pGraphics->mEdParam = 0;
+        pGraphics->mEdControl = 0;
+        pGraphics->mDefEditProc = 0;
+        pGraphics->mParamEditMsg = kNone;
+        //force full redraw when closing text entry
+        RECT r = { 0, 0, pGraphics->Width(), pGraphics->Height() };
+        InvalidateRect(hWnd, &r, FALSE);
+        UpdateWindow(hWnd);
       }
       SetFocus(hWnd); // Added to get keyboard focus again when user clicks in window
       SetCapture(hWnd);
@@ -221,17 +225,6 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
         if (pGraphics->OnMouseOver(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), &GetMouseMod(wParam)))
         {
           TRACKMOUSEEVENT eventTrack = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, hWnd, HOVER_DEFAULT };
-          if (pGraphics->TooltipsEnabled()) 
-          {
-            int c = pGraphics->GetMouseOver();
-            if (c != pGraphics->mTooltipIdx) 
-            {
-              if (c >= 0) eventTrack.dwFlags |= TME_HOVER;
-              pGraphics->mTooltipIdx = c;
-              pGraphics->HideTooltip();
-            }
-          }
-
           TrackMouseEvent(&eventTrack);
         }
       }
@@ -242,14 +235,8 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 
       return 0;
     }
-    case WM_MOUSEHOVER: 
-    {
-      pGraphics->ShowTooltip();
-		  return 0;
-    }
     case WM_MOUSELEAVE:
     {
-      pGraphics->HideTooltip();
       pGraphics->OnMouseOut();
       return 0;
     }
@@ -319,12 +306,6 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
       else
         return 0;
     }
-    case WM_KEYUP:
-    {
-      HWND rootHWnd = GetAncestor(hWnd, GA_ROOT);
-      SendMessage(rootHWnd, msg, wParam, lParam);
-      return DefWindowProc(hWnd, msg, wParam, lParam);
-    }
     case WM_PAINT:
     {
       RECT r;
@@ -384,12 +365,10 @@ LRESULT CALLBACK IGraphicsWin::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 // static
 LRESULT CALLBACK IGraphicsWin::ParamEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-  IGraphicsWin* pGraphics = (IGraphicsWin*) GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+  IGraphicsWin* pGraphics = (IGraphicsWin*) GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
   if (pGraphics && pGraphics->mParamEditWnd && pGraphics->mParamEditWnd == hWnd)
   {
-    pGraphics->HideTooltip();
-
     switch (msg)
     {
       case WM_CHAR:
@@ -429,11 +408,6 @@ LRESULT CALLBACK IGraphicsWin::ParamEditProc(HWND hWnd, UINT msg, WPARAM wParam,
           pGraphics->mParamEditMsg = kCommit;
           return 0;
         }
-        else if (wParam == VK_ESCAPE)
-        {
-          pGraphics->mParamEditMsg = kCancel;
-          return 0;
-        }
         break;
       }
       case WM_SETFOCUS:
@@ -443,7 +417,7 @@ LRESULT CALLBACK IGraphicsWin::ParamEditProc(HWND hWnd, UINT msg, WPARAM wParam,
       }
       case WM_KILLFOCUS:
       {
-        pGraphics->mParamEditMsg = kCommit;
+        pGraphics->mParamEditMsg = kCancel; // when another window is focussed, kill the text edit box
         break;
       }
       // handle WM_GETDLGCODE so that we can say that we want the return key message
@@ -486,8 +460,7 @@ LRESULT CALLBACK IGraphicsWin::ParamEditProc(HWND hWnd, UINT msg, WPARAM wParam,
 IGraphicsWin::IGraphicsWin(IPlugBase* pPlug, int w, int h, int refreshFPS)
   : IGraphics(pPlug, w, h, refreshFPS), mPlugWnd(0), mParamEditWnd(0),
     mPID(0), mParentWnd(0), mMainWnd(0), mCustomColorStorage(0),
-    mEdControl(0), mEdParam(0), mDefEditProc(0), mParamEditMsg(kNone),
-    mTooltipWnd(0), mShowingTooltip(false), mTooltipIdx(-1),
+    mEdControl(0), mEdParam(0), mDefEditProc(0), mParamEditMsg(kNone), mIdleTicks(0),
     mHInstance(0)
 {}
 
@@ -667,28 +640,6 @@ void* IGraphicsWin::OpenWindow(void* pParentWnd)
     SetAllControlsDirty();
   }
 
-  if (mPlugWnd && TooltipsEnabled())
-  {
-    bool ok = false;
-    static const INITCOMMONCONTROLSEX iccex = { sizeof(INITCOMMONCONTROLSEX), ICC_TAB_CLASSES };
-
-    if (InitCommonControlsEx(&iccex))
-    {
-      mTooltipWnd = CreateWindowEx(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-                                   CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, mPlugWnd, NULL, mHInstance, NULL);
-      if (mTooltipWnd)
-      {
-        SetWindowPos(mTooltipWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        TOOLINFO ti = { TTTOOLINFOA_V2_SIZE, TTF_IDISHWND | TTF_SUBCLASS, mPlugWnd, (UINT_PTR)mPlugWnd };
-        ti.lpszText = (LPTSTR)NULL;
-        SendMessage(mTooltipWnd, TTM_ADDTOOL, 0, (LPARAM)&ti);
-        ok = true;
-      }
-    }
-
-    if (!ok) EnableTooltips(ok);
-  }
-
   return mPlugWnd;
 }
 
@@ -767,14 +718,6 @@ void IGraphicsWin::CloseWindow()
 {
   if (mPlugWnd)
   {
-    if (mTooltipWnd)
-    {
-      DestroyWindow(mTooltipWnd);
-      mTooltipWnd = 0;
-      mShowingTooltip = false;
-      mTooltipIdx = -1;
-    }
-
     DestroyWindow(mPlugWnd);
     mPlugWnd = 0;
 
@@ -943,9 +886,6 @@ IPopupMenu* IGraphicsWin::CreateIPopupMenu(IPopupMenu* pMenu, IRECT* pAreaRect)
       }
     }
     DestroyMenu(hMenu);
-
-    RECT r = { 0, 0, Width(), Height() };
-    InvalidateRect(mPlugWnd, &r, FALSE);
   }
   return result;
 }
@@ -964,20 +904,21 @@ void IGraphicsWin::CreateTextEntry(IControl* pControl, IText* pText, IRECT* pTex
     default:                  editStyle = ES_CENTER; break;
   }
 
-  mParamEditWnd = CreateWindow("EDIT", pString, ES_AUTOHSCROLL /*only works for left aligned text*/ | WS_CHILD | WS_VISIBLE | ES_MULTILINE | editStyle,
+  editStyle |= ES_MULTILINE;
+
+  mParamEditWnd = CreateWindow("EDIT", pString, WS_CHILD | WS_VISIBLE | editStyle ,
                                pTextRect->L, pTextRect->T, pTextRect->W()+1, pTextRect->H()+1,
                                mPlugWnd, (HMENU) PARAM_EDIT_ID, mHInstance, 0);
 
   HFONT font = CreateFont(pText->mSize, 0, 0, 0, pText->mStyle == IText::kStyleBold ? FW_BOLD : 0, pText->mStyle == IText::kStyleItalic ? TRUE : 0, 0, 0, 0, 0, 0, 0, 0, pText->mFont);
 
-  SendMessage(mParamEditWnd, EM_LIMITTEXT, (WPARAM) pControl->GetTextEntryLength(), 0);
   SendMessage(mParamEditWnd, WM_SETFONT, (WPARAM) font, 0);
   SendMessage(mParamEditWnd, EM_SETSEL, 0, -1);
-
+  Edit_LimitText(mParamEditWnd, pControl->GetTextEntryLength());
   SetFocus(mParamEditWnd);
 
   mDefEditProc = (WNDPROC) SetWindowLongPtr(mParamEditWnd, GWLP_WNDPROC, (LONG_PTR) ParamEditProc);
-  SetWindowLongPtr(mParamEditWnd, GWLP_USERDATA, 0xdeadf00b);
+  SetWindowLong(mParamEditWnd, GWLP_USERDATA, (LPARAM) this);
 
   //DeleteObject(font);
 
@@ -1024,42 +965,10 @@ void IGraphicsWin::DesktopPath(WDL_String* pPath)
   #ifndef __MINGW_H // TODO: alternative for gcc?
   TCHAR strPath[MAX_PATH_LEN];
   SHGetSpecialFolderPath( 0, strPath, CSIDL_DESKTOP, FALSE );
+
   pPath->Set(strPath, MAX_PATH_LEN);
   #endif
 }
-
-void IGraphicsWin::AppSupportPath(WDL_String* pPath, bool isSystem)
-{
-#ifndef __MINGW_H // TODO: alternative for gcc?
-  TCHAR strPath[MAX_PATH_LEN];
-
-  if (isSystem)
-    SHGetFolderPathA(NULL, CSIDL_COMMON_APPDATA, NULL, 0, strPath);
-  else
-    SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, strPath);
-
-  pPath->Set(strPath, MAX_PATH_LEN);
-#endif
-}
-
-//void IGraphicsWin::VST3PresetsPath(WDL_String* pPath, bool isSystem)
-//{
-//  TCHAR strPath[MAX_PATH_LEN];
-//
-//  if (!isSystem)
-//  {
-//    TCHAR strPath[MAX_PATH_LEN];
-//    SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, strPath);
-//    pPath->Set(strPath, MAX_PATH_LEN);
-//  }
-//  else
-//  {
-//    SHGetFolderPathA(NULL, CSIDL_COMMON_APPDATA, NULL, 0, strPath);
-//    pPath->Set(strPath, MAX_PATH_LEN);
-//  }
-//
-//  pPath->AppendFormatted(MAX_PATH_LEN, "\\VST3 Presets\\%s\\%s", mPlug->GetMfrNameStr(), mPlug->GetPluginNameStr());
-//}
 
 void IGraphicsWin::PromptForFile(WDL_String* pFilename, EFileAction action, WDL_String* pDir, char* extensions)
 {
@@ -1166,10 +1075,6 @@ void IGraphicsWin::PromptForFile(WDL_String* pFilename, EFileAction action, WDL_
     #endif
     pFilename->Set(ofn.lpstrFile);
   }
-  else
-  {
-    pFilename->Set("");
-  }
 }
 
 UINT_PTR CALLBACK CCHookProc(HWND hdlg, UINT uiMsg, WPARAM wParam, LPARAM lParam)
@@ -1237,99 +1142,5 @@ bool IGraphicsWin::OpenURL(const char* url,
     MessageBox(mPlugWnd, errMsgOnFailure, msgWindowTitle, MB_OK);
   }
   return false;
-}
-
-void IGraphicsWin::SetTooltip(const char* tooltip)
-{
-  TOOLINFO ti = { TTTOOLINFOA_V2_SIZE, 0, mPlugWnd, (UINT_PTR)mPlugWnd };
-  ti.lpszText = (LPTSTR)tooltip;
-  SendMessage(mTooltipWnd, TTM_UPDATETIPTEXT, 0, (LPARAM)&ti);
-}
-
-void IGraphicsWin::ShowTooltip()
-{
-  const char* tooltip = GetControl(mTooltipIdx)->GetTooltip();
-  if (tooltip)
-  {
-    assert(strlen(tooltip) < 80);
-    SetTooltip(tooltip);
-    mShowingTooltip = true;
-  }
-}
-
-void IGraphicsWin::HideTooltip()
-{
-  if (mShowingTooltip)
-  {
-    SetTooltip(NULL);
-    mShowingTooltip = false;
-  }
-}
-
-bool IGraphicsWin::GetTextFromClipboard(WDL_String* pStr)
-{
-  bool success = false;
-  HGLOBAL hglb;
-  
-  if (IsClipboardFormatAvailable(CF_UNICODETEXT))
-  {
-    if(OpenClipboard(0))
-    {
-      hglb = GetClipboardData(CF_UNICODETEXT);
-      
-      if(hglb != NULL)
-      {
-        WCHAR *orig_str = (WCHAR*)GlobalLock(hglb);
-        
-        if (orig_str != NULL)
-        {
-          int orig_len = (int) wcslen(orig_str);
-          
-          orig_len += 1;
-          
-          // find out how much space is needed
-          int new_len = WideCharToMultiByte(CP_UTF8,
-                                            0,
-                                            orig_str,
-                                            orig_len,
-                                            0,
-                                            0,
-                                            NULL,
-                                            NULL);
-          
-          if (new_len > 0)
-          {
-            char *new_str = new char[new_len + 1];
-            
-            int num_chars = WideCharToMultiByte(CP_UTF8,
-                                                0,
-                                                orig_str,
-                                                orig_len,
-                                                new_str,
-                                                new_len,
-                                                NULL,
-                                                NULL);
-            
-            if (num_chars > 0)
-            {
-              success = true;
-              pStr->Set(new_str);
-            }
-            
-            delete [] new_str;
-          }
-          
-          GlobalUnlock(hglb);
-        }
-      }
-    }
-    
-    CloseClipboard();
-  }
-  
-  if(!success)
-    pStr->Set("");
-  
-  return success;
 }
 

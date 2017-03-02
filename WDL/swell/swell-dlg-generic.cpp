@@ -39,32 +39,22 @@ static WDL_PtrList<modalDlgRet> s_modalDialogs;
 
 HWND DialogBoxIsActive()
 {
-  int a = s_modalDialogs.GetSize();
-  while (a-- > 0)
-  {
-    modalDlgRet *r = s_modalDialogs.Get(a);
-    if (r && !r->has_ret && r->hwnd) return r->hwnd; 
-  }
-  return NULL;
+  return s_modalDialogs.GetSize() ? s_modalDialogs.Get(s_modalDialogs.GetSize()-1)->hwnd : NULL;
 }
 
 void EndDialog(HWND wnd, int ret)
 {   
   if (!wnd) return;
   
-  int a = s_modalDialogs.GetSize();
-  while (a-->0)
-  {
-    modalDlgRet *r = s_modalDialogs.Get(a);
-    if (r && r->hwnd == wnd)  
+  int x;
+  for (x = 0; x < s_modalDialogs.GetSize(); x ++)
+    if (s_modalDialogs.Get(x)->hwnd == wnd)  
     {
-      r->ret = ret;
-      if (r->has_ret) return;
-
-      r->has_ret=true;
+      s_modalDialogs.Get(x)->has_ret=true;
+      s_modalDialogs.Get(x)->ret = ret;
     }
-  }
   DestroyWindow(wnd);
+  // todo
 }
 
 int SWELL_DialogBox(SWELL_DialogResourceIndex *reshead, const char *resid, HWND parent,  DLGPROC dlgproc, LPARAM param)
@@ -73,10 +63,6 @@ int SWELL_DialogBox(SWELL_DialogResourceIndex *reshead, const char *resid, HWND 
   if (resid) // allow modal dialogs to be created without template
   {
     if (!p||(p->windowTypeFlags&SWELL_DLG_WS_CHILD)) return -1;
-  }
-  else if (parent)
-  {
-    resid = (const char *)(INT_PTR)(0x400002); // force non-child, force no minimize box
   }
 
 
@@ -106,7 +92,7 @@ int SWELL_DialogBox(SWELL_DialogResourceIndex *reshead, const char *resid, HWND 
       Sleep(10);
     }
     ret=r.ret;
-    s_modalDialogs.DeletePtr(&r);
+    s_modalDialogs.Delete(s_modalDialogs.Find(&r));
 
     a = SWELL_topwindows;
     while (a)
@@ -121,21 +107,13 @@ int SWELL_DialogBox(SWELL_DialogResourceIndex *reshead, const char *resid, HWND 
 
 HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, HWND parent, DLGPROC dlgproc, LPARAM param)
 {
-  int forceStyles=0; // 1=resizable, 2=no minimize, 4=no close
-  bool forceNonChild=false;
-  if ((((INT_PTR)resid)&~0xf)==0x400000)
-  {
-    forceStyles = (int) (((INT_PTR)resid)&0xf);
-    if (forceStyles) forceNonChild=true;
-    resid=0;
-  }
   SWELL_DialogResourceIndex *p=resById(reshead,resid);
   if (!p&&resid) return 0;
   
   RECT r={0,0,p?p->width : 300, p?p->height : 200};
   HWND owner=NULL;
 
-  if (!forceNonChild && parent && (!p || (p->windowTypeFlags&SWELL_DLG_WS_CHILD)))
+  if ((!p || (p->windowTypeFlags&SWELL_DLG_WS_CHILD)) && parent) 
   {
   } 
   else 
@@ -144,11 +122,10 @@ HWND SWELL_CreateDialog(SWELL_DialogResourceIndex *reshead, const char *resid, H
     parent = NULL; // top level window
   }
 
-  HWND__ *h = new HWND__(parent,0,&r,NULL,false,NULL,NULL, owner);
-  if (forceNonChild || (p && !(p->windowTypeFlags&SWELL_DLG_WS_CHILD)))
+  HWND__ *h = new HWND__(parent,0,&r,NULL,false,NULL,NULL);
+  if (p && !(p->windowTypeFlags&SWELL_DLG_WS_CHILD))
   {
-    if ((forceStyles&1) || (p && (p->windowTypeFlags&SWELL_DLG_WS_RESIZABLE))) 
-      h->m_style |= WS_THICKFRAME|WS_CAPTION;
+    if (p->windowTypeFlags&SWELL_DLG_WS_RESIZABLE) h->m_style |= WS_THICKFRAME|WS_CAPTION;
     else h->m_style |= WS_CAPTION;
   }
   else if (!p && !parent) h->m_style |= WS_CAPTION;

@@ -77,7 +77,9 @@ public:
   void InformHostOfParamChange(int idx, double normalizedValue);
   void EndInformHostOfParamChange(int idx);
   void InformHostOfProgramChange() { }; //NA
-      
+  
+  void SetParameterFromGUI(int idx, double normalizedValue);
+    
   int GetSamplePos();
   double GetTempo();
   void GetTimeSig(int* pNum, int* pDenom);
@@ -94,6 +96,7 @@ protected:
 private:
   AAX_CParameter<bool>* mBypassParameter;
   AAX_ITransport* mTransport;
+  bool mDoesMidi;
   WDL_PtrList<WDL_String> mParamIDs;
 };
 

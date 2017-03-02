@@ -266,7 +266,6 @@ inline void MTRand::seed()
 	
 	// No point in trying this on Windows machines - won't work, so it just slows things down
 #ifndef WIN32
-#ifndef WDL_MTRAND_FASTSEED
 	// First try getting an array from /dev/urandom
 	FILE* urandom = fopen( "/dev/urandom", "rb" );
 	if( urandom )
@@ -280,7 +279,6 @@ inline void MTRand::seed()
 		fclose(urandom);
 		if( success ) { seed( bigSeed, N );  return; }
 	}
-#endif
 #endif
 	
 	// Was not successful, so use time() and clock() instead

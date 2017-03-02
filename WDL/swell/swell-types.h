@@ -34,9 +34,6 @@
 #include <dlfcn.h>
 #include <ctype.h>
 
-#if defined(__cplusplus)
-#include <cstddef>
-#endif
 
 #include <stdint.h>
 typedef intptr_t INT_PTR, *PINT_PTR, LONG_PTR, *PLONG_PTR;
@@ -47,6 +44,11 @@ typedef uintptr_t UINT_PTR, *PUINT_PTR, ULONG_PTR, *PULONG_PTR, DWORD_PTR, *PDWO
 #endif
 #ifndef TRUE
 #define TRUE 1
+#endif
+
+#ifndef max
+#define max(x,y) ((x)<(y)?(y):(x))
+#define min(x,y) ((x)<(y)?(x):(y))
 #endif
 
 #ifndef S_OK
@@ -64,22 +66,15 @@ typedef uintptr_t UINT_PTR, *PUINT_PTR, ULONG_PTR, *PULONG_PTR, DWORD_PTR, *PDWO
 #define GetBValue(x) ((x)&0xff)
 
 // basic platform compat defines
-#ifndef stricmp
 #define stricmp(x,y) strcasecmp(x,y)
-#endif
-#ifndef strnicmp
 #define strnicmp(x,y,z) strncasecmp(x,y,z)
-#endif
 
 #define DeleteFile(x) (!unlink(x))
 #define MoveFile(x,y) (!rename(x,y))
 #define GetCurrentDirectory(sz,buf) (!getcwd(buf,sz))
 #define SetCurrentDirectory(buf) (!chdir(buf))
 #define CreateDirectory(x,y) (!mkdir((x),0755))
-
-#ifndef wsprintf
 #define wsprintf sprintf
-#endif
 
 #ifndef LOWORD
 #define MAKEWORD(a, b)      ((unsigned short)(((BYTE)(a)) | ((WORD)((BYTE)(b))) << 8))
@@ -109,10 +104,6 @@ typedef uintptr_t UINT_PTR, *PUINT_PTR, ULONG_PTR, *PULONG_PTR, DWORD_PTR, *PDWO
 #define MAX_PATH 1024
 
 
-#if !defined(max) && !defined(WDL_NO_DEFINE_MINMAX)
-#define max(x,y) ((x)<(y)?(y):(x))
-#define min(x,y) ((x)<(y)?(x):(y))
-#endif
 
 // SWELLAPP stuff (swellappmain.mm)
 #ifdef __cplusplus
@@ -170,8 +161,8 @@ typedef unsigned int ULONG;
 typedef short SHORT;
 typedef int *LPINT;
 typedef char CHAR;
-typedef char *LPSTR, *LPTSTR;
-typedef const char *LPCSTR, *LPCTSTR;
+typedef char *LPSTR;
+typedef const char *LPCSTR;
 
 #define __int64 long long // define rather than typedef, for unsigned __int64 support
 
@@ -660,7 +651,7 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define GWL_WNDPROC         (-4)
 #define DWL_DLGPROC         (-8)
 
-#define SWELL_NOT_WS_VISIBLE ((int)0x80000000)
+#define SWELL_NOT_WS_VISIBLE 0x80000000L
 #define WS_CHILDWINDOW (WS_CHILD)
 #define WS_CHILD      0x40000000L
 #define WS_DISABLED   0x08000000L
@@ -689,7 +680,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define CB_GETCOUNT                 0x0146
 #define CB_GETCURSEL                0x0147
 #define CB_GETLBTEXT                0x0148
-#define CB_GETLBTEXTLEN             0x0149
 #define CB_INSERTSTRING             0x014A
 #define CB_RESETCONTENT             0x014B
 #define CB_FINDSTRING               0x014C
@@ -699,7 +689,7 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define CB_FINDSTRINGEXACT          0x0158
 #define CB_INITSTORAGE              0x0161
 
-#define LB_ADDSTRING            0x0180 // oops these don't all match real windows, todo fix (maybe)
+#define LB_ADDSTRING            0x0180
 #define LB_INSERTSTRING         0x0181
 #define LB_DELETESTRING         0x0182
 #define LB_GETTEXT              0x0183
@@ -708,7 +698,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define LB_SETCURSEL            0x0186
 #define LB_GETSEL               0x0187
 #define LB_GETCURSEL            0x0188
-#define LB_GETTEXTLEN           0x018A
 #define LB_GETCOUNT             0x018B
 #define LB_GETSELCOUNT          0x0190
 #define LB_GETITEMDATA          0x0199
@@ -810,7 +799,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define BS_AUTO3STATE      0x00000006L
 #define BS_AUTORADIOBUTTON 0x00000009L
 #define BS_OWNERDRAW       0x0000000BL
-#define BS_BITMAP          0x00000080L
 
 
 
@@ -890,8 +878,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define MFS_ENABLED MF_ENABLED
 #define MFS_UNCHECKED MF_UNCHECKED
 
-#define EN_SETFOCUS         0x0100
-#define EN_KILLFOCUS        0x0200
 #define EN_CHANGE           0x0300
 #define STN_CLICKED         0
 #define STN_DBLCLK          1
@@ -986,7 +972,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define CBN_SELCHANGE       1
 #define CBN_EDITCHANGE      5
 #define CBN_DROPDOWN        7
-#define CBN_CLOSEUP         8
 #define CB_ERR (-1)
 
 #define EM_GETSEL               0xF0B0
@@ -1164,19 +1149,6 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define VK_F10            0x79
 #define VK_F11            0x7A
 #define VK_F12            0x7B
-#define VK_F13            0x7C
-#define VK_F14            0x7D
-#define VK_F15            0x7E
-#define VK_F16            0x7F
-#define VK_F17            0x80
-#define VK_F18            0x81
-#define VK_F19            0x82
-#define VK_F20            0x83
-#define VK_F21            0x84
-#define VK_F22            0x85
-#define VK_F23            0x86
-#define VK_F24            0x87
-
 #define VK_NUMLOCK        0x90
 #define VK_SCROLL         0x91
 
@@ -1185,16 +1157,17 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define MK_MBUTTON        0x10
 
 
-#define IDC_SIZENESW MAKEINTRESOURCE(32643)
-#define IDC_SIZENWSE MAKEINTRESOURCE(32642)
-#define IDC_IBEAM MAKEINTRESOURCE(32513)
-#define IDC_UPARROW MAKEINTRESOURCE(32516)
-#define IDC_NO MAKEINTRESOURCE(32648)
-#define IDC_SIZEALL MAKEINTRESOURCE(32646)
-#define IDC_SIZENS MAKEINTRESOURCE(32645)
-#define IDC_SIZEWE MAKEINTRESOURCE(32644)
-#define IDC_ARROW MAKEINTRESOURCE(32512)
+#define IDC_SIZENESW MAKEINTRESOURCE(-1007)
+#define IDC_SIZENWSE MAKEINTRESOURCE(-1006)
+#define IDC_IBEAM MAKEINTRESOURCE(-1005)
+#define IDC_UPARROW MAKEINTRESOURCE(-1004)
+#define IDC_NO MAKEINTRESOURCE(-1003)
+#define IDC_SIZEALL MAKEINTRESOURCE(-1002)
+#define IDC_SIZENS MAKEINTRESOURCE(-1001)
+#define IDC_SIZEWE MAKEINTRESOURCE(-1000)
+#define IDC_ARROW MAKEINTRESOURCE(-999)
 #define IDC_HAND MAKEINTRESOURCE(32649)
+
 
 
 
@@ -1278,6 +1251,7 @@ __attribute__ ((visibility ("default"))) BOOL WINAPI DllMain(HINSTANCE hInstDLL,
 #define _RC_CHOP        0x00000300              /*   chop */
 
 
+extern struct SWELL_CursorResourceIndex *SWELL_curmodule_cursorresource_head;
 extern struct SWELL_DialogResourceIndex *SWELL_curmodule_dialogresource_head;
 extern struct SWELL_MenuResourceIndex *SWELL_curmodule_menuresource_head;
 
@@ -1350,8 +1324,6 @@ extern struct SWELL_MenuResourceIndex *SWELL_curmodule_menuresource_head;
 #define WAIT_FAILED (DWORD)0xFFFFFFFF
 #define INFINITE            0xFFFFFFFF
 
-
-#define FR_PRIVATE 1 // AddFontResourceEx()
 
 typedef struct _ICONINFO
 {

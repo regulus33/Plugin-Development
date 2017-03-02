@@ -94,11 +94,11 @@ void SWELL_Internal_PMQ_ClearAllMessages(HWND hwnd);
 
 #ifndef SWELL_CB_InsertString
 
-#define SWELL_CB_InsertString(hwnd, idx, pos, str) ((int)SendDlgItemMessage(hwnd,idx,CB_INSERTSTRING,(pos),(LPARAM)(str)))
-#define SWELL_CB_AddString(hwnd, idx, str) ((int)SendDlgItemMessage(hwnd,idx,CB_ADDSTRING,0,(LPARAM)(str)))
-#define SWELL_CB_SetCurSel(hwnd,idx,val) ((int)SendDlgItemMessage(hwnd,idx,CB_SETCURSEL,(WPARAM)(val),0))
-#define SWELL_CB_GetNumItems(hwnd,idx) ((int)SendDlgItemMessage(hwnd,idx,CB_GETCOUNT,0,0))
-#define SWELL_CB_GetCurSel(hwnd,idx) ((int)SendDlgItemMessage(hwnd,idx,CB_GETCURSEL,0,0))
+#define SWELL_CB_InsertString(hwnd, idx, pos, str) SendDlgItemMessage(hwnd,idx,CB_INSERTSTRING,(pos),(LPARAM)(str))
+#define SWELL_CB_AddString(hwnd, idx, str) SendDlgItemMessage(hwnd,idx,CB_ADDSTRING,0,(LPARAM)(str))
+#define SWELL_CB_SetCurSel(hwnd,idx,val) SendDlgItemMessage(hwnd,idx,CB_SETCURSEL,(WPARAM)(val),0)
+#define SWELL_CB_GetNumItems(hwnd,idx) SendDlgItemMessage(hwnd,idx,CB_GETCOUNT,0,0)
+#define SWELL_CB_GetCurSel(hwnd,idx) SendDlgItemMessage(hwnd,idx,CB_GETCURSEL,0,0)
 #define SWELL_CB_SetItemData(hwnd,idx,item,val) SendDlgItemMessage(hwnd,idx,CB_SETITEMDATA,(item),(val))
 #define SWELL_CB_GetItemData(hwnd,idx,item) SendDlgItemMessage(hwnd,idx,CB_GETITEMDATA,(item),0)
 #define SWELL_CB_GetItemText(hwnd,idx,item,buf,bufsz) SendDlgItemMessage(hwnd,idx,CB_GETLBTEXT,(item),(LPARAM)(buf))
@@ -107,7 +107,7 @@ void SWELL_Internal_PMQ_ClearAllMessages(HWND hwnd);
 
 #define SWELL_TB_SetPos(hwnd, idx, pos) SendDlgItemMessage(hwnd,idx, TBM_SETPOS,TRUE,(pos))
 #define SWELL_TB_SetRange(hwnd, idx, low, hi) SendDlgItemMessage(hwnd,idx,TBM_SETRANGE,TRUE,(LPARAM)MAKELONG((low),(hi)))
-#define SWELL_TB_GetPos(hwnd, idx) ((int)SendDlgItemMessage(hwnd,idx,TBM_GETPOS,0,0))
+#define SWELL_TB_GetPos(hwnd, idx) SendDlgItemMessage(hwnd,idx,TBM_GETPOS,0,0)
 #define SWELL_TB_SetTic(hwnd, idx, pos) SendDlgItemMessage(hwnd,idx,TBM_SETTIC,0,(pos))
 
 #endif
@@ -138,39 +138,6 @@ void SWELL_Internal_PMQ_ClearAllMessages(HWND hwnd);
 #define WDL_GDP_PolyBezierTo(hdc,p,np) PolyBezierTo(hdc,p,np)
 
 #define SWELL_SyncCtxFrameBuffer(x) // no longer used
-
-#endif
-
-#if !defined(SWELL_AUTORELEASE_HELPER_DEFINED) && defined(__cplusplus) && (!defined(__APPLE__) || defined(SWELL_API_DEFINE))
-#define SWELL_AUTORELEASE_HELPER_DEFINED
-
-class SWELL_AutoReleaseHelper  // no-op on non-apple
-{
-#ifdef __APPLE__
-    void *m_arp;
-#endif
-  public:
-    SWELL_AutoReleaseHelper() 
-    {
-#ifdef __APPLE__
-      m_arp = SWELL_InitAutoRelease();
-#endif
-    }
-    ~SWELL_AutoReleaseHelper() 
-    { 
-#ifdef __APPLE__
-      release(); 
-#endif
-    }
-
-    void release()
-    {
-#ifdef __APPLE__
-      if (m_arp) { SWELL_QuitAutoRelease(m_arp); m_arp=NULL; }
-#endif
-    }
-
-};
 
 #endif
 

@@ -3,7 +3,6 @@
 
 IRECT GetRegionRect(EventRef pEvent, int gfxW, int gfxH)
 {
-#if __MAC_OS_X_VERSION_MAX_ALLOWED <= 1060
   RgnHandle pRgn = 0;
   if (GetEventParameter(pEvent, kEventParamRgnHandle, typeQDRgnHandle, 0, sizeof(RgnHandle), 0, &pRgn) == noErr && pRgn)
   {
@@ -11,9 +10,21 @@ IRECT GetRegionRect(EventRef pEvent, int gfxW, int gfxH)
     GetRegionBounds(pRgn, &rct);
     return IRECT(rct.left, rct.top, rct.right, rct.bottom);
   }
-#endif
   return IRECT(0, 0, gfxW, gfxH);
 }
+
+//IRECT GetControlRect(EventRef pEvent, int gfxW, int gfxH)
+//{
+//  Rect rct;
+//  if (GetEventParameter(pEvent, kEventParamCurrentBounds, typeQDRectangle, 0, sizeof(Rect), 0, &rct) == noErr) {
+//    int w = rct.right - rct.left;
+//    int h = rct.bottom - rct.top;
+//    if (w > 0 && h > 0) {
+//      return IRECT(0, 0, w, h);
+//    }
+//  }
+//  return IRECT(0, 0, gfxW, gfxH);
+//}
 
 void ResizeWindow(WindowRef pWindow, int w, int h)
 {
@@ -46,11 +57,9 @@ IGraphicsCarbon::IGraphicsCarbon(IGraphicsMac* pGraphicsMac,
   , mEdParam(0)
   , mPrevX(0)
   , mPrevY(0)
+//, mRgn(NewRgn())
   , mLeftOffset(leftOffset)
   , mTopOffset(topOffset)
-  , mShowingTooltip(false)
-  , mTooltipIdx(-1)
-  , mTooltipTimer(0)
 {
   TRACE;
 
@@ -146,12 +155,12 @@ IGraphicsCarbon::~IGraphicsCarbon()
     mEdParam = 0;
   }
 
-  HideTooltip();
   RemoveEventLoopTimer(mTimer);
   RemoveEventHandler(mControlHandler);
   RemoveEventHandler(mWindowHandler);
   mTimer = 0;
   mView = 0;
+//  DisposeRgn(mRgn);
 }
 
 bool IGraphicsCarbon::Resize(int w, int h)
@@ -193,7 +202,7 @@ MenuRef IGraphicsCarbon::CreateMenu(IPopupMenu* pMenu)
           switch (pMenu->GetPrefix())
           {
             case 0:
-              prefixString = CFStringCreateWithCString(NULL, "", kCFStringEncodingUTF8); break;
+              prefixString = CFStringCreateWithFormat(NULL, 0, CFSTR(""),i+1); break;
             case 1:
               prefixString = CFStringCreateWithFormat(NULL, 0, CFSTR("%1d: "),i+1); break;
             case 2:
@@ -373,6 +382,8 @@ pascal OSStatus IGraphicsCarbon::MainEventHandler(EventHandlerCallRef pHandlerCa
 
           IRECT r = GetRegionRect(pEvent, gfxW, gfxH);
 
+          CGrafPtr port = 0;
+
           if (_this->mIsComposited)
           {
             GetEventParameter(pEvent, kEventParamCGContextRef, typeCGContextRef, 0, sizeof(CGContextRef), 0, &(_this->mCGC));
@@ -380,19 +391,20 @@ pascal OSStatus IGraphicsCarbon::MainEventHandler(EventHandlerCallRef pHandlerCa
             CGContextScaleCTM(_this->mCGC, 1.0, -1.0);
             pGraphicsMac->Draw(&r);
           }
-#if __MAC_OS_X_VERSION_MAX_ALLOWED <= 1060
           else
           {
-            CGrafPtr port = 0;
-            
             GetEventParameter(pEvent, kEventParamGrafPort, typeGrafPtr, 0, sizeof(CGrafPtr), 0, &port);
             QDBeginCGContext(port, &(_this->mCGC));
+            
+            //RgnHandle clipRegion = NewRgn();
+            //GetPortClipRegion(port, clipRegion);
             
             Rect portBounds;
             GetPortBounds(port, &portBounds);
 
             int offsetW = 0;
             int offsetH = -portBounds.top;
+            //int offsetH = (portBounds.bottom - portBounds.top) - gfxH; // this almost works with AS, but clip rect seems wrong when previewing/breaks RTAS
             
             if ((portBounds.right - portBounds.left) >= gfxW)
             {
@@ -405,8 +417,9 @@ pascal OSStatus IGraphicsCarbon::MainEventHandler(EventHandlerCallRef pHandlerCa
             pGraphicsMac->Draw(&r); // Carbon non-composited will redraw everything, the IRECT passed here is the entire plugin-gui
             
             QDEndCGContext(port, &(_this->mCGC));
+            
+            //DisposeRgn(clipRegion);
           }
-#endif
           return noErr;
         }
       }
@@ -456,8 +469,6 @@ pascal OSStatus IGraphicsCarbon::MainEventHandler(EventHandlerCallRef pHandlerCa
       {
         case kEventMouseDown:
         {
-           _this->HideTooltip();
-          
           if (_this->mTextEntryView)
           {
             #if !(USE_MLTE)
@@ -503,23 +514,6 @@ pascal OSStatus IGraphicsCarbon::MainEventHandler(EventHandlerCallRef pHandlerCa
           _this->mPrevX = x;
           _this->mPrevY = y;
           pGraphicsMac->OnMouseOver(x, y, &mmod);
-          
-          if (pGraphicsMac->TooltipsEnabled()) 
-          {
-            int c = pGraphicsMac->GetMouseOver();
-            if (c != _this->mTooltipIdx) 
-            {
-              _this->mTooltipIdx = c;
-              _this->HideTooltip();
-              const char* tooltip = c >= 0 ? pGraphicsMac->GetControl(c)->GetTooltip() : NULL;
-              if (CSTR_NOT_EMPTY(tooltip)) 
-              {
-                _this->mTooltip = tooltip;
-                _this->mTooltipTimer = pGraphicsMac->FPS() * 3 / 2;  //TODO: remove FPS link
-              }
-            }
-          }          
-          
           return noErr;
         }
 
@@ -605,22 +599,6 @@ pascal void IGraphicsCarbon::TimerHandler(EventLoopTimerRef pTimer, void* pGraph
 //      SetRectRgn(_this->mRgn, r.L, h - r.B, r.R, h - r.T);
 //      UpdateControls(_this->mWindow, _this->mRgn);
       UpdateControls(_this->mWindow, 0);
-    }
-  }
-  
-  if (_this->mTooltipTimer) 
-  {    
-    if (!(--_this->mTooltipTimer)) 
-    {
-      if (!_this->mShowingTooltip) 
-      {
-        _this->ShowTooltip();
-        _this->mTooltipTimer = _this->mGraphicsMac->FPS() * 10; // TODO: remove FPS link
-      }
-      else 
-      {
-        _this->HideTooltip();
-      }
     }
   }
 }
@@ -1020,7 +998,7 @@ void IGraphicsCarbon::CreateTextEntry(IControl* pControl, IText* pText, IRECT* p
 
   if (!pControl || mTextEntryView || !mIsComposited) return;
 
-  Rect r = { static_cast<short>(pTextRect->T), static_cast<short>(pTextRect->L), static_cast<short>(pTextRect->B), static_cast<short>(pTextRect->R) };
+  Rect r = { pTextRect->T, pTextRect->L, pTextRect->B, pTextRect->R };
 
   // these adjustments should make it the same as the cocoa one, i.e. the same size as the pTextRect, but with the extra blue rim often this is too small
   //Rect r = { pTextRect->T+4, pTextRect->L+3, pTextRect->B-3, pTextRect->R -3 };
@@ -1072,7 +1050,7 @@ void IGraphicsCarbon::CreateTextEntry(IControl* pControl, IText* pText, IRECT* p
       break;
   }
 
-  ControlFontStyleRec font = { kControlUseJustMask | kControlUseSizeMask | kControlUseFontMask, 0, static_cast<SInt16>(pText->mSize), 0, 0, static_cast<SInt16>(just), 0, 0 };
+  ControlFontStyleRec font = { kControlUseJustMask | kControlUseSizeMask | kControlUseFontMask, 0, pText->mSize, 0, 0, just, 0, 0 };
   CFStringRef str = CFStringCreateWithCString(NULL, pText->mFont, kCFStringEncodingUTF8);
   font.font = ATSFontFamilyFindFromName(str, kATSOptionFlagsDefault);
 
@@ -1219,37 +1197,4 @@ pascal OSStatus IGraphicsCarbon::TextEntryHandler(EventHandlerCallRef pHandlerCa
 }
 
 #endif // USE_MLTE
-
-void IGraphicsCarbon::ShowTooltip()
-{
-  HMHelpContentRec helpTag;
-  helpTag.version = kMacHelpVersion;
-
-  helpTag.tagSide = kHMInsideTopLeftCorner;
-  HIRect r = CGRectMake(mGraphicsMac->GetMouseX(), mGraphicsMac->GetMouseY() + 23, 1, 1);
-  HIRectConvert(&r, kHICoordSpaceView, mView, kHICoordSpaceScreenPixel, NULL);
-  helpTag.absHotRect.top = (int)r.origin.y;
-  helpTag.absHotRect.left = (int)r.origin.x;
-  helpTag.absHotRect.bottom = helpTag.absHotRect.top + (int)r.size.height;
-  helpTag.absHotRect.right = helpTag.absHotRect.left + (int)r.size.width;
-  
-  helpTag.content[kHMMinimumContentIndex].contentType = kHMCFStringLocalizedContent;
-  CFStringRef str = CFStringCreateWithCString(NULL, mTooltip, kCFStringEncodingUTF8);
-  helpTag.content[kHMMinimumContentIndex].u.tagCFString = str;
-  helpTag.content[kHMMaximumContentIndex].contentType = kHMNoContent;
-  HMDisplayTag(&helpTag);
-  CFRelease(str);
-  mShowingTooltip = true;
-}
-
-void IGraphicsCarbon::HideTooltip()
-{
-  mTooltipTimer = 0;
-  if (mShowingTooltip) 
-  {
-    HMHideTag();
-    mShowingTooltip = false;
-  }
-}
-
 #endif // IPLUG_NO_CARBON_SUPPORT

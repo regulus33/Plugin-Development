@@ -25,7 +25,7 @@ static bool ClipLine(int* pX1, int* pY1, int* pX2, int* pY2, int nX, int nY)
   int x1 = *pX1, y1 = *pY1, x2 = *pX2, y2 = *pY2;
   int e1 = OffscreenTest(x1, y1, nX, nY); 
   int e2 = OffscreenTest(x2, y2, nX, nY);
-  int timeout = 32;
+  
   bool accept = false, done = false;
   do
   {
@@ -70,7 +70,7 @@ static bool ClipLine(int* pX1, int* pY1, int* pX2, int* pY2, int nX, int nY)
       }
     }
   }
-  while (!done && timeout--);
+  while (!done);
 
   *pX1 = x1;
   *pY1 = y1;
@@ -97,7 +97,6 @@ static bool ClipFLine(float* x1, float* y1, float* x2, float*y2, int w, int h)
   int e1 = OffscreenFTest(tx1, ty1, tw, th); 
   int e2 = OffscreenFTest(tx2, ty2, tw, th);
   
-  int timeout = 32;
   bool accept = false, done = false;
   do
   {
@@ -149,7 +148,7 @@ static bool ClipFLine(float* x1, float* y1, float* x2, float*y2, int w, int h)
       }
     }
   }
-  while (!done && timeout--);
+  while (!done);
 
   *x1 = tx1;
   *y1 = ty1;
@@ -201,8 +200,7 @@ inline static void LICE_DottedVertLineFAST(LICE_IBitmap* dest, int x, int y1, in
 
 // this is the white-color table, doing this properly requires correcting the destination color specifically
 #define DO_AA_GAMMA_CORRECT 0
-#if DO_AA_GAMMA_CORRECT
-static unsigned char AA_GAMMA_CORRECT[256] =
+static unsigned char AA_GAMMA_CORRECT[256] = 
 {  
   // 1.8 gamma
   0,11,17,21,25,28,31,34,37,39,42,44,46,48,50,52,54,56,58,60,61,63,65,67,68,70,71,73,74,76,77,79,80,81,83,84,85,87,88,89,91,92,93,94,96,97,98,99,100,101,103,104,105,106,107,108,109,110,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,132,133,134,135,136,137,138,139,140,141,142,142,143,144,145,146,147,148,149,149,150,151,152,153,154,154,155,156,157,158,159,159,160,161,162,163,163,164,165,166,166,167,168,169,170,170,171,172,173,173,174,175,176,176,177,178,179,179,180,181,182,182,183,184,184,185,186,187,187,188,189,189,190,191,191,192,193,194,194,195,196,196,197,198,198,199,200,200,201,202,202,203,204,204,205,206,206,207,208,208,209,210,210,211,212,212,213,214,214,215,215,216,217,217,218,219,219,220,220,221,222,222,223,224,224,225,225,226,227,227,228,228,229,230,230,231,231,232,233,233,234,234,235,236,236,237,237,238,239,239,240,240,241,241,242,243,243,244,244,245,245,246,247,247,248,248,249,249,250,251,251,252,252,253,253,254,255
@@ -216,11 +214,10 @@ static unsigned char AA_GAMMA_CORRECT[256] =
   // 2.6 gamma
   //0,30,39,46,51,56,60,63,67,70,73,76,78,81,83,85,87,89,91,93,95,97,99,101,102,104,105,107,109,110,111,113,114,116,117,118,120,121,122,123,125,126,127,128,129,130,131,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,148,149,150,151,152,153,154,155,155,156,157,158,159,160,160,161,162,163,164,164,165,166,167,167,168,169,170,170,171,172,173,173,174,175,175,176,177,177,178,179,179,180,181,181,182,183,183,184,185,185,186,187,187,188,188,189,190,190,191,192,192,193,193,194,195,195,196,196,197,197,198,199,199,200,200,201,201,202,203,203,204,204,205,205,206,206,207,207,208,208,209,210,210,211,211,212,212,213,213,214,214,215,215,216,216,217,217,218,218,219,219,220,220,221,221,222,222,223,223,223,224,224,225,225,226,226,227,227,228,228,229,229,230,230,230,231,231,232,232,233,233,234,234,234,235,235,236,236,237,237,237,238,238,239,239,240,240,240,241,241,242,242,243,243,243,244,244,245,245,245,246,246,247,247,247,248,248,249,249,249,250,250,251,251,251,252,252,253,253,253,254,254,255
 };
-#endif
 
 static void GetAAPxWeight(int err, int alpha, int* wt, int* iwt)
 {
-  int i = err>>8;
+  int i = err/256;
   int w = 255-i;
 
 #if DO_AA_GAMMA_CORRECT
@@ -228,15 +225,15 @@ static void GetAAPxWeight(int err, int alpha, int* wt, int* iwt)
   i = AA_GAMMA_CORRECT[i];
 #endif
 
-  w = (alpha*w) >> 8;
-  i = (alpha*i) >> 8;
+  w = alpha*w/256; 
+  i = alpha*i/256;
   *wt = w;
   *iwt = i;
 }
 
 static void GetAAPxWeightFAST(int err, int* wt, int* iwt)
 {
-  int i = err>>8;
+  int i = err/256;
   int w = 255-i;
 
 #if DO_AA_GAMMA_CORRECT
@@ -351,7 +348,7 @@ public:
         for (i = 0; i < pxon; ++i, px += span) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
         px += pxoff*span;
       }
-      for (i = 0; i < lice_min(pxon, y2-y); ++i, px += span) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
+      for (i = 0; i < min(pxon, y2-y); px += span) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
     }
     else if (y1 == y2)
     {
@@ -361,7 +358,7 @@ public:
         for (i = 0; i < pxon; ++i, ++px) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
         px += pxoff;
       }
-      for (i = 0; i < lice_min(pxon, x2-x); ++i, ++px) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
+      for (i = 0; i < min(pxon, x2-x); ++px) DOPIX((LICE_pixel_chan*) px, r, g, b, a, aw)
     }
   }
 
@@ -888,8 +885,8 @@ static void DoBezierFillSegment(LICE_IBitmap* dest, int x1, int y1, int x2, int 
   if (x2 < x1) return;
   if (x2 == x1)
   {
-    int ylo = lice_min(y1,yfill);
-    int yhi = lice_max(y2,yfill);
+    int ylo = min(y1,yfill);
+    int yhi = max(y2,yfill);
     if (yhi != yfill) --yhi;
     LICE_Line(dest, x1, ylo, x1, yhi, color, alpha, mode, false);
     return;
@@ -919,8 +916,8 @@ static void DoBezierFillSegmentX(LICE_IBitmap* dest, int x1, int y1, int x2, int
   if (y2 < y1) return;
   if (y2 == y1)
   {
-    int xlo = lice_min(x1,xfill);
-    int xhi = lice_max(x2,xfill);
+    int xlo = min(x1,xfill);
+    int xhi = max(x2,xfill);
     if (xhi != xfill) --xhi;
     LICE_Line(dest, xlo, y1, xhi, y1, color, alpha, mode, false);
     return;
@@ -1231,8 +1228,8 @@ public:
 
     while (y-->0)
     {
-      int x1=lice_max(xa,0);
-      int x2=lice_min(xb,wid);
+      int x1=max(xa,0);
+      int x2=min(xb,wid);
       LICE_pixel* xpx = px + x1;
       int cnt=x2-x1;
       while (cnt-->0)
@@ -1245,15 +1242,15 @@ public:
       b += db;
       if (a >= 65536)
       {
-        int na = a>>16;
-        a &= 65535;
+        int na = a/65536;
+        a %= 65536;
         if (astep<0)na=-na;
         xa += na;
       }
       if (b >= 65536)
       {
-        int nb = b>>16;
-        b &= 65535;
+        int nb = b/65536;
+        b %= 65536;
         if (bstep<0)nb=-nb;
         xb += nb;
       }
@@ -1289,8 +1286,8 @@ public:
  
     while (y-->0)
     {
-      int x1=lice_max(xa,0);
-      int x2=lice_min(xb,wid);
+      int x1=max(xa,0);
+      int x2=min(xb,wid);
       LICE_pixel* xpx = px + x1;
       int cnt=x2-x1;
       while (cnt-->0)
@@ -1303,15 +1300,15 @@ public:
       b += db;
       if (a >= 65536)
       {
-        int na = a>>16;
-        a &= 65535;
+        int na = a/65536;
+        a %= 65536;
         if (astep<0)na=-na;
         xa += na;
       }
       if (b >= 65536)
       {
-        int nb = b>>16;
-        b &= 65535;
+        int nb = b/65536;
+        b %= 65536;
         if (bstep<0)nb=-nb;
         xb += nb;
       }
@@ -1408,15 +1405,15 @@ void LICE_FillTrapezoid(LICE_IBitmap* dest, int x1a, int x1b, int y1, int x2a, i
     y1=0;
     if (a >= 65536)
     {
-      int na = a>>16;
-      a &= 65535;
+      int na = a/65536;
+      a %= 65536;
       if (astep<0)na=-na;
       x1a += na;
     }
     if (b >= 65536)
     {
-      int nb = b>>16;
-      b &= 65535;
+      int nb = b/65536;
+      b %= 65536;
       if (bstep<0)nb=-nb;
       x1b += nb;
     }
@@ -1433,7 +1430,7 @@ void LICE_FillTrapezoid(LICE_IBitmap* dest, int x1a, int x1b, int y1, int x2a, i
   if (!dxady && !dxbdy)
   {
     if (x1a<0)x1a=0;
-    x1b = lice_min(x1b,wid)-x1a;    
+    x1b = min(x1b,wid)-x1a;    
     px+=x1a;
     if (x1b<1) return;
   }
@@ -1574,7 +1571,7 @@ void LICE_FillConvexPolygon(LICE_IBitmap* dest, const int* x, const int* y, int 
     int y_a2 = _Y(a2);
     int y_b2 = _Y(b2);
 
-    int y2 = lice_min(y_a2, y_b2);   
+    int y2 = min(y_a2, y_b2);   
     int x1a = FindXOnSegment(_X(a1), _Y(a1), _X(a2), y_a2, y1);
     int x1b = FindXOnSegment(_X(b1), _Y(b1), _X(b2), y_b2, y1);
     int x2a = FindXOnSegment(_X(a1), _Y(a1), _X(a2), y_a2, y2);

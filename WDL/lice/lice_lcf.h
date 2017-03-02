@@ -22,6 +22,7 @@ public:
   WDL_INT64 GetOutSize() { return m_outsize; }
   WDL_INT64 GetInSize() { return m_inbytes; }
 
+
 private:
   WDL_FileWrite *m_file;
   WDL_INT64 m_outsize,m_inbytes;
@@ -73,8 +74,6 @@ public:
 
   int GetWidth(){ return m_curhdr[m_rd_which].w; }
   int GetHeight(){ return m_curhdr[m_rd_which].h; }
-
-  int m_bytes_read; // increases for statistics, caller can clear 
 
 private:
   LICE_MemBitmap m_workbm;

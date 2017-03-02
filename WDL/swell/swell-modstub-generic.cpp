@@ -56,7 +56,8 @@ public:
     void *tmp = dlopen(fn,RTLD_LAZY);
     if (!tmp)
     {
-      printf("Error loading '%s': %s\n",fn,dlerror());
+      printf("Error loading '%s'\n",fn);
+      perror("dlopen:");
       exit(2);
     }
 #else

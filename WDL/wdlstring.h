@@ -26,10 +26,7 @@
   It provides only the simplest features, and does not do anything confusing like
   operator overloading. It uses a WDL_HeapBuf for internal storage.
 
-  Actually: there are WDL_String and WDL_FastString -- the latter's Get() returns const char, and tracks
-  the length of the string, which is often faster. Because of this, you are not permitted to directly modify
-  the buffer returned by Get().
-
+  You can do Set, Get, Append, Insert, and SetLen.. that's about it
   
 */
 
@@ -43,362 +40,304 @@
 #ifndef WDL_STRING_IMPL_ONLY
 class WDL_String
 {
-  public:
-  #ifdef WDL_STRING_INTF_ONLY
-    void Set(const char *str, int maxlen=0);
-    void Set(const WDL_String *str, int maxlen=0);
-    void Append(const char *str, int maxlen=0);
-    void Append(const WDL_String *str, int maxlen=0);
-    void DeleteSub(int position, int len);
-    void Insert(const char *str, int position, int maxlen=0);
-    void Insert(const WDL_String *str, int position, int maxlen=0);
-    bool SetLen(int length, bool resizeDown=false); // returns true on success
-    void Ellipsize(int minlen, int maxlen);
-    const char *get_filepart() const; // returns whole string if no dir chars
-    const char *get_fileext() const; // returns ".ext" or end of string "" if no extension
-    bool remove_fileext(); // returns true if extension was removed
-    char remove_filepart(bool keepTrailingSlash=false); // returns dir character used, or zero if string emptied
-    int remove_trailing_dirchars(); // returns trailing dirchar count removed, will not convert "/" into ""
+public:
+  explicit WDL_String(int hbgran) : m_hb(hbgran WDL_HEAPBUF_TRACEPARM("WDL_String(4)"))
+  {
+  }
+  explicit WDL_String(const char *initial=NULL, int initial_len=0) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String"))
+  {
+    if (initial) Set(initial,initial_len);
+  }
+  WDL_String(const WDL_String &s) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String(2)"))
+  {
+    Set(&s);
+  }
+  WDL_String(const WDL_String *s) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String(3)"))
+  {
+    if (s && s != this) Set(s);
+  }
+  ~WDL_String()
+  {
+  }
+#define WDL_STRING_PREFIX 
+#else
+#define WDL_STRING_PREFIX WDL_String::
+#endif
 
-    void SetAppendFormattedArgs(bool append, int maxlen, const char* fmt, va_list arglist);
-    void WDL_VARARG_WARN(printf,3,4) SetFormatted(int maxlen, const char *fmt, ...);
-    void WDL_VARARG_WARN(printf,3,4) AppendFormatted(int maxlen, const char *fmt, ...);
-  #endif
+  void WDL_STRING_PREFIX Set(const char *str, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+    int s=0;
+    if (maxlen>0) while (s < maxlen && str[s]) s++;
+    else s=(int)strlen(str);   
+    __doSet(0,str,s,0);
+  }
+#endif
 
-    const char *Get() const { return m_hb.GetSize()?(char*)m_hb.Get():""; }
+  void WDL_STRING_PREFIX Set(const WDL_String *str, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+#ifdef WDL_STRING_FASTSUB_DEFINED
+    int s = str->GetLength();
+    if (maxlen>0 && maxlen<s) s=maxlen;
 
-  #ifdef WDL_STRING_FASTSUB_DEFINED
-    int GetLength() const { int a = m_hb.GetSize(); return a>0?a-1:0; }
+    __doSet(0,str->Get(),s,0);
+#else
+    Set(str->Get(), maxlen); // might be faster: "partial" strlen
+#endif
+  }
+#endif
 
-    // for binary-safe manipulations
-    void SetRaw(const char *str, int len) { __doSet(0,str,len,0); }
-    void AppendRaw(const char *str, int len) { __doSet(GetLength(),str,len,0); }
-    void InsertRaw(const char *str, int position, int ilen)
+  void WDL_STRING_PREFIX Append(const char *str, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+    int s=0;
+    if (maxlen>0) while (s < maxlen && str[s]) s++;
+    else s=(int)strlen(str);
+
+    __doSet(GetLength(),str,s,0);
+  }
+#endif
+
+  void WDL_STRING_PREFIX Append(const WDL_String *str, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+#ifdef WDL_STRING_FASTSUB_DEFINED
+    int s = str->GetLength();
+    if (maxlen>0 && maxlen<s) s=maxlen;
+
+    __doSet(GetLength(),str->Get(),s,0);
+#else
+    Append(str->Get(), maxlen); // might be faster: "partial" strlen
+#endif
+  }
+#endif
+
+  void WDL_STRING_PREFIX DeleteSub(int position, int len)
+#ifdef WDL_STRING_INTF_ONLY
+    ;
+#else
     {
-      const int srclen = GetLength();
-      if (position<0) position=0;
-      else if (position>srclen) position=srclen;
-      if (ilen>0) __doSet(position,str,ilen,srclen-position);
+	  char *p=(char *)m_hb.Get();
+	  if (!m_hb.GetSize() || !*p) return;
+	  int l=m_hb.GetSize()-1;
+	  if (position < 0 || position >= l) return;
+	  if (position+len > l) len=l-position;
+    if (len>0)
+    {
+  	  memmove(p+position,p+position+len,l-position-len+1);
+      m_hb.Resize(l+1-len,false);
     }
+  }
+#endif
 
-  #else
-    char *Get()
+  void WDL_STRING_PREFIX Insert(const char *str, int position, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+    int ilen=0;
+    if (maxlen>0) while (ilen < maxlen && str[ilen]) ilen++;
+    else ilen=(int)strlen(str);
+
+    int srclen = GetLength();
+    if (position<0) position=0;
+    else if (position>srclen) position=srclen;
+    if (ilen>0) __doSet(position,str,ilen,srclen-position);
+  }
+#endif
+
+  void WDL_STRING_PREFIX Insert(const WDL_String *str, int position, int maxlen
+#ifdef WDL_STRING_INTF_ONLY
+      =0); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =0)
+#endif
+  {
+#ifdef WDL_STRING_FASTSUB_DEFINED
+    int ilen = str->GetLength();
+    if (maxlen>0 && maxlen<ilen) ilen=maxlen;
+
+    int srclen = m_hb.GetSize()>0 ? m_hb.GetSize()-1 : 0;
+    if (position<0) position=0;
+    else if (position>srclen) position=srclen;
+    if (ilen>0) __doSet(position,str->Get(),ilen,srclen-position);
+#else
+    Insert(str->Get(), position, maxlen); // might be faster: "partial" strlen
+#endif
+  }
+#endif
+
+  void WDL_STRING_PREFIX SetLen(int length, bool resizeDown
+#ifdef WDL_STRING_INTF_ONLY
+      =false); 
+#else
+#ifdef WDL_STRING_IMPL_ONLY
+    )
+#else
+    =false)
+#endif
+  {                       
+#ifdef WDL_STRING_FASTSUB_DEFINED
+    int osz = m_hb.GetSize()?m_hb.GetSize()-1:0;
+#endif
+    char *b=(char*)m_hb.Resize(length+1,resizeDown);
+    if (m_hb.GetSize()==length+1) 
     {
-      if (m_hb.GetSize()) return (char *)m_hb.Get();
-      static char c; c=0; return &c; // don't return "", in case it gets written to.
+#ifdef WDL_STRING_FASTSUB_DEFINED
+      if (length > osz) memset(b+osz,' ',length-osz);
+#endif
+      b[length]=0;
     }
-    int GetLength() const { return m_hb.GetSize()?(int)strlen((const char*)m_hb.Get()):0; }
-  #endif
+  }
+#endif
+  void WDL_STRING_PREFIX SetAppendFormattedArgs(bool append, int maxlen, const char* fmt, va_list arglist) 
+#ifdef WDL_STRING_INTF_ONLY
+    ; 
+#else
+  {
+    int offs = append ? GetLength() : 0;
+    char* b= (char*) m_hb.Resize(offs+maxlen+1,false)+offs;
+    if (m_hb.GetSize() != offs+maxlen+1) return;
 
-    explicit WDL_String(int hbgran) : m_hb(hbgran WDL_HEAPBUF_TRACEPARM("WDL_String(4)")) { }
-    explicit WDL_String(const char *initial=NULL, int initial_len=0) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String"))
+    #ifdef _WIN32
+		  int written = _vsnprintf(b, maxlen+1, fmt, arglist);
+      if (written < 0 || written>=maxlen) b[written=b[0]?maxlen:0]=0;
+    #else
+		  int written = vsnprintf(b, maxlen+1, fmt, arglist);
+      if (written > maxlen) written=maxlen;
+    #endif
+
+    m_hb.Resize(offs + written + 1,false);
+	}
+#endif
+
+
+  void WDL_VARARG_WARN(printf,3,4) WDL_STRING_PREFIX SetFormatted(int maxlen, const char *fmt, ...) 
+#ifdef WDL_STRING_INTF_ONLY
+    ; 
+#else
+  {
+    va_list arglist;
+    va_start(arglist, fmt);
+    SetAppendFormattedArgs(false,maxlen,fmt,arglist);
+    va_end(arglist);
+  }
+#endif
+
+  void WDL_VARARG_WARN(printf,3,4) WDL_STRING_PREFIX AppendFormatted(int maxlen, const char* fmt, ...) 
+#ifdef WDL_STRING_INTF_ONLY
+    ; 
+#else
+  {
+    va_list arglist;
+    va_start(arglist, fmt);
+    SetAppendFormattedArgs(true,maxlen,fmt,arglist);
+    va_end(arglist);
+  }
+#endif
+
+
+  void WDL_STRING_PREFIX Ellipsize(int minlen, int maxlen)
+#ifdef WDL_STRING_INTF_ONLY
+    ;
+#else
+  {
+    if (maxlen >= 4 && m_hb.GetSize() && GetLength() > maxlen) 
     {
-      if (initial) Set(initial,initial_len);
-    }
-    WDL_String(const WDL_String &s) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String(2)")) { Set(&s); }
-    WDL_String(const WDL_String *s) : m_hb(128 WDL_HEAPBUF_TRACEPARM("WDL_String(3)")) { if (s && s != this) Set(s); }
-    ~WDL_String() { }
-#endif // ! WDL_STRING_IMPL_ONLY
-
-#ifndef WDL_STRING_INTF_ONLY
-  #ifdef WDL_STRING_IMPL_ONLY
-    #define WDL_STRING_FUNCPREFIX WDL_String::
-    #define WDL_STRING_DEFPARM(x)
-  #else
-    #define WDL_STRING_FUNCPREFIX 
-    #define WDL_STRING_DEFPARM(x) =(x)
-  #endif
-
-    void WDL_STRING_FUNCPREFIX Set(const char *str, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      int s=0;
-      if (str)
+      if (minlen<0) minlen=0;
+      char *b = (char *)m_hb.Get();
+      int i;
+      for (i = maxlen-4; i >= minlen; --i) 
       {
-        if (maxlen>0) while (s < maxlen && str[s]) s++;
-        else s=(int)strlen(str);   
-      }
-      __doSet(0,str,s,0);
-    }
-
-    void WDL_STRING_FUNCPREFIX Set(const WDL_String *str, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      #ifdef WDL_STRING_FASTSUB_DEFINED
-        int s = str ? str->GetLength() : 0;
-        if (maxlen>0 && maxlen<s) s=maxlen;
-
-        __doSet(0,str?str->Get():NULL,s,0);
-      #else
-        Set(str?str->Get():NULL, maxlen); // might be faster: "partial" strlen
-      #endif
-    }
-
-    void WDL_STRING_FUNCPREFIX Append(const char *str, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      int s=0;
-      if (str)
-      {
-        if (maxlen>0) while (s < maxlen && str[s]) s++;
-        else s=(int)strlen(str);
-      }
-
-      __doSet(GetLength(),str,s,0);
-    }
-
-    void WDL_STRING_FUNCPREFIX Append(const WDL_String *str, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      #ifdef WDL_STRING_FASTSUB_DEFINED
-        int s = str ? str->GetLength() : 0;
-        if (maxlen>0 && maxlen<s) s=maxlen;
-
-        __doSet(GetLength(),str?str->Get():NULL,s,0);
-      #else
-        Append(str?str->Get():NULL, maxlen); // might be faster: "partial" strlen
-      #endif
-    }
-
-    void WDL_STRING_FUNCPREFIX DeleteSub(int position, int len)
-    {
-      int l=m_hb.GetSize()-1;
-      char *p=(char *)m_hb.Get();
-      if (l<0 || !*p || position < 0 || position >= l) return;
-      if (position+len > l) len=l-position;
-      if (len>0)
-      {
-        memmove(p+position,p+position+len,l-position-len+1);
-        m_hb.Resize(l+1-len,false);
-      }
-    }
-
-    void WDL_STRING_FUNCPREFIX Insert(const char *str, int position, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      int ilen=0;
-      if (str)
-      {
-        if (maxlen>0) while (ilen < maxlen && str[ilen]) ilen++;
-        else ilen=(int)strlen(str);
-      }
-
-      const int srclen = GetLength();
-      if (position<0) position=0;
-      else if (position>srclen) position=srclen;
-      if (ilen>0) __doSet(position,str,ilen,srclen-position);
-    }
-
-    void WDL_STRING_FUNCPREFIX Insert(const WDL_String *str, int position, int maxlen WDL_STRING_DEFPARM(0))
-    {
-      #ifdef WDL_STRING_FASTSUB_DEFINED
-        int ilen = str ? str->GetLength() : 0;
-        if (maxlen>0 && maxlen<ilen) ilen=maxlen;
-
-        const int srclen = m_hb.GetSize()>0 ? m_hb.GetSize()-1 : 0;
-        if (position<0) position=0;
-        else if (position>srclen) position=srclen;
-        if (ilen>0) __doSet(position,str->Get(),ilen,srclen-position);
-      #else
-        Insert(str?str->Get():NULL, position, maxlen); // might be faster: "partial" strlen
-      #endif
-    }
-
-    bool WDL_STRING_FUNCPREFIX SetLen(int length, bool resizeDown WDL_STRING_DEFPARM(false))
-    {                       
-      #ifdef WDL_STRING_FASTSUB_DEFINED
-      int osz = m_hb.GetSize()-1;
-      if (osz<0)osz=0;
-      #endif
-      if (length < 0) length=0;
-      char *b=(char*)m_hb.ResizeOK(length+1,resizeDown);
-      if (b) 
-      {
-        #ifdef WDL_STRING_FASTSUB_DEFINED
-          if (length > osz) memset(b+osz,' ',length-osz);
-        #endif
-        b[length]=0;
-        return true;
-      }
-      return false;
-    }
-
-    void WDL_STRING_FUNCPREFIX SetAppendFormattedArgs(bool append, int maxlen, const char* fmt, va_list arglist) 
-    {
-      int offs = append ? GetLength() : 0;
-      char *b= (char*) m_hb.ResizeOK(offs+maxlen+1,false);
-      
-      if (!b) return;
-
-      b+=offs;
-
-      #ifdef _WIN32
-        int written = _vsnprintf(b, maxlen+1, fmt, arglist);
-        if (written < 0 || written>=maxlen) b[written=b[0]?maxlen:0]=0;
-      #else
-        int written = vsnprintf(b, maxlen+1, fmt, arglist);
-        if (written > maxlen) written=maxlen;
-      #endif
-
-      m_hb.Resize(offs + written + 1,false);
-    }
-
-    void WDL_VARARG_WARN(printf,3,4) WDL_STRING_FUNCPREFIX SetFormatted(int maxlen, const char *fmt, ...) 
-    {
-      va_list arglist;
-      va_start(arglist, fmt);
-      SetAppendFormattedArgs(false,maxlen,fmt,arglist);
-      va_end(arglist);
-    }
-
-    void WDL_VARARG_WARN(printf,3,4) WDL_STRING_FUNCPREFIX AppendFormatted(int maxlen, const char *fmt, ...) 
-    {
-      va_list arglist;
-      va_start(arglist, fmt);
-      SetAppendFormattedArgs(true,maxlen,fmt,arglist);
-      va_end(arglist);
-    }
-
-    void WDL_STRING_FUNCPREFIX Ellipsize(int minlen, int maxlen)
-    {
-      if (maxlen >= 4 && m_hb.GetSize() && GetLength() > maxlen) 
-      {
-        if (minlen<0) minlen=0;
-        char *b = (char *)m_hb.Get();
-        int i;
-        for (i = maxlen-4; i >= minlen; --i) 
+        if (b[i] == ' ') 
         {
-          if (b[i] == ' ') 
-          {
-            memcpy(b+i, "...",4);
-            m_hb.Resize(i+4,false);
-            break;
-          }
-        }
-        if (i < minlen && maxlen >= 4) 
-        {
-          memcpy(b+maxlen-4, "...",4);    
-          m_hb.Resize(maxlen,false);
-        }
-      }
-    }
-    const char * WDL_STRING_FUNCPREFIX get_filepart() const // returns whole string if no dir chars
-    {
-      const char *s = Get();
-      const char *p = s + GetLength() - 1;
-      while (p >= s && !WDL_IS_DIRCHAR(*p)) --p;
-      return p + 1;
-    }
-    const char * WDL_STRING_FUNCPREFIX get_fileext() const // returns ".ext" or end of string "" if no extension
-    {
-      const char *s = Get();
-      const char *endp = s + GetLength();
-      const char *p = endp - 1;
-      while (p >= s && !WDL_IS_DIRCHAR(*p))
-      {
-        if (*p == '.') return p;
-        --p;
-      }
-      return endp;
-    }
-    bool WDL_STRING_FUNCPREFIX remove_fileext() // returns true if extension was removed
-    {
-      const char *str = Get();
-      int pos = GetLength() - 1;
-      while (pos >= 0)
-      {
-        char c = str[pos];
-        if (WDL_IS_DIRCHAR(c)) break;
-        if (c == '.')
-        {
-          SetLen(pos);
-          return true;
-        }
-        --pos;
-      }
-      return false;
-    }
-
-    char WDL_STRING_FUNCPREFIX remove_filepart(bool keepTrailingSlash WDL_STRING_DEFPARM(false)) // returns directory character used, or 0 if string emptied
-    {
-      char rv=0;
-      const char *str = Get();
-      int pos = GetLength() - 1;
-      while (pos > 0)
-      {
-        char c = str[pos];
-        if (WDL_IS_DIRCHAR(c)) 
-        {
-          rv=c;
-          if (keepTrailingSlash) ++pos;
+          memcpy(b+i, "...",4);
+          m_hb.Resize(i+4,false);
           break;
         }
-        --pos;
       }
-      SetLen(pos);
-      return rv;
-    }
-
-    int WDL_STRING_FUNCPREFIX remove_trailing_dirchars() // returns trailing dirchar count removed
-    {
-      int cnt = 0;
-      const char *str = Get();
-      const int l = GetLength()-1;
-      while (cnt < l)
+      if (i < minlen && maxlen >= 4) 
       {
-        char c = str[l - cnt];
-        if (!WDL_IS_DIRCHAR(c)) break;
-        ++cnt;
+        memcpy(b+maxlen-4, "...",4);    
+        m_hb.Resize(maxlen,false);
       }
-      if (cnt > 0) SetLen(l + 1 - cnt);
-      return cnt;
     }
-#ifndef WDL_STRING_IMPL_ONLY
-  private:
+  }
 #endif
-    void WDL_STRING_FUNCPREFIX __doSet(int offs, const char *str, int len, int trailkeep)
-    {   
-      // if non-empty, or (empty and allocated and Set() rather than append/insert), then allow update, otherwise do nothing
-      if (len==0 && !trailkeep && !offs)
+
+#ifndef WDL_STRING_IMPL_ONLY
+    #ifdef WDL_STRING_FASTSUB_DEFINED
+      const char *Get() const { return m_hb.GetSize()?(char*)m_hb.Get():""; }
+      int GetLength() const { int a = m_hb.GetSize(); return a>0?a-1:0; }
+    #else
+      char *Get() const
       {
-        #ifdef WDL_STRING_FREE_ON_CLEAR
-          m_hb.Resize(0,true);
-        #else
-          char *p = (char *)m_hb.Resize(1,false);
-          if (p) *p=0;
-        #endif
+        if (m_hb.GetSize()) return (char *)m_hb.Get();
+        static char c; c=0; return &c; // don't return "", in case it gets written to.
       }
-      else if (len>0 && offs >= 0) 
+      int GetLength() const { return m_hb.GetSize()?(int)strlen((const char*)m_hb.Get()):0; }
+    #endif
+
+    private:
+
+#endif
+
+    void WDL_STRING_PREFIX __doSet(int offs, const char *str, int len, int trailkeep)
+    #ifdef WDL_STRING_INTF_ONLY
+        ; 
+    #else
+    {   
+      if (len>0 || (!trailkeep && !offs && m_hb.GetSize()>1)) // if non-empty, or (empty and allocated and Set() rather than append/insert), then allow update, otherwise do nothing
       {
-        const int oldsz = m_hb.GetSize();
-        const int newsz=offs+len+trailkeep+1;
-        if (oldsz < newsz) 
+        char *newbuf=(char*)m_hb.Resize(offs+len+trailkeep+1,false);
+        if (m_hb.GetSize()==offs+len+trailkeep+1) 
         {
-          const char *oldb = (const char *)m_hb.Get();
-          const char *newb = (const char *)m_hb.Resize(newsz,false); // resize up if necessary
-
-          // in case str overlaps with input, keep it valid
-          if (str && newb != oldb && str >= oldb && str < oldb+oldsz) str = newb + (str - oldb);
-        }
-
-        if (m_hb.GetSize() >= newsz)
-        {
-          char *newbuf = (char *)m_hb.Get();
           if (trailkeep>0) memmove(newbuf+offs+len,newbuf+offs,trailkeep);
-          if (str) memmove(newbuf+offs,str,len);
-          newbuf[newsz-1]=0;
-
-          // resize down if necessary
-          if (newsz < oldsz) m_hb.Resize(newsz,false);
+          memcpy(newbuf+offs,str,len);
+          newbuf[offs+len+trailkeep]=0;
         }
       }
     }
-
-  #undef WDL_STRING_FUNCPREFIX
-  #undef WDL_STRING_DEFPARM
-#endif // ! WDL_STRING_INTF_ONLY
+    #endif
 
 #ifndef WDL_STRING_IMPL_ONLY
-
-  private:
-    #ifdef WDL_STRING_INTF_ONLY
-      void __doSet(int offs, const char *str, int len, int trailkeep);
-    #endif
 
     WDL_HeapBuf m_hb;
 };

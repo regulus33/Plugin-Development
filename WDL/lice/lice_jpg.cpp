@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include "lice.h"
 #include <setjmp.h>
-#include "../wdltypes.h"
 
 extern "C" {
 #include "../jpeglib/jpeglib.h"
@@ -85,6 +84,7 @@ LICE_IBitmap *LICE_LoadJPGFromResource(HINSTANCE hInst, int resid, LICE_IBitmap 
   if (setjmp(jerr.setjmp_buffer)) 
   {
     jpeg_destroy_decompress(&cinfo);
+    DeleteObject(res);
     return 0;
   }
   jpeg_create_decompress(&cinfo);
@@ -107,17 +107,18 @@ LICE_IBitmap *LICE_LoadJPGFromResource(HINSTANCE hInst, int resid, LICE_IBitmap 
 
   buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
-  LICE_IBitmap *delbmp = NULL;
-  if (bmp) bmp->resize(cinfo.output_width,cinfo.output_height);
-  else delbmp = bmp = new WDL_NEW LICE_MemBitmap(cinfo.output_width,cinfo.output_height);
-
-  if (!bmp || bmp->getWidth() != (int)cinfo.output_width || bmp->getHeight() != (int)cinfo.output_height) 
+  if (bmp)
   {
-    jpeg_finish_decompress(&cinfo);
-    jpeg_destroy_decompress(&cinfo);
-    delete delbmp;
-    return 0;
+    bmp->resize(cinfo.output_width,cinfo.output_height);
+    if (bmp->getWidth() != (int)cinfo.output_width || bmp->getHeight() != (int)cinfo.output_height) 
+    {
+      jpeg_finish_decompress(&cinfo);
+      jpeg_destroy_decompress(&cinfo);
+      DeleteObject(res);
+      return 0;
+    }
   }
+  else bmp=new LICE_MemBitmap(cinfo.output_width,cinfo.output_height);
 
   LICE_pixel *bmpptr = bmp->getBits();
   int dbmpptr=bmp->getRowSpan();
@@ -162,6 +163,7 @@ LICE_IBitmap *LICE_LoadJPGFromResource(HINSTANCE hInst, int resid, LICE_IBitmap 
 
   jpeg_finish_decompress(&cinfo);
   jpeg_destroy_decompress(&cinfo);  // we created cinfo.src with some special alloc so I think it gets collected
+  DeleteObject(res);
 
   return bmp;
 
@@ -179,10 +181,8 @@ LICE_IBitmap *LICE_LoadJPG(const char *filename, LICE_IBitmap *bmp)
   int row_stride;
 
   FILE *fp=NULL;
-#if defined(_WIN32) && !defined(WDL_NO_SUPPORT_UTF8)
-  #ifdef WDL_SUPPORT_WIN9X
+#ifdef _WIN32
   if (GetVersion()<0x80000000)
-  #endif
   {
     WCHAR wf[2048];
     if (MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,filename,-1,wf,2048))
@@ -218,19 +218,18 @@ LICE_IBitmap *LICE_LoadJPG(const char *filename, LICE_IBitmap *bmp)
   buffer = (*cinfo.mem->alloc_sarray)
 		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
-
-  LICE_IBitmap *delbmp = NULL;
-  if (bmp) bmp->resize(cinfo.output_width,cinfo.output_height);
-  else delbmp = bmp = new WDL_NEW LICE_MemBitmap(cinfo.output_width,cinfo.output_height);
-
-  if (!bmp || bmp->getWidth() != (int)cinfo.output_width || bmp->getHeight() != (int)cinfo.output_height)
+  if (bmp)
   {
-    jpeg_finish_decompress(&cinfo);
-    jpeg_destroy_decompress(&cinfo);
-    fclose(fp);
-    delete delbmp;
-    return 0;
+    bmp->resize(cinfo.output_width,cinfo.output_height);
+    if (bmp->getWidth() != (int)cinfo.output_width || bmp->getHeight() != (int)cinfo.output_height) 
+    {
+      jpeg_finish_decompress(&cinfo);
+      jpeg_destroy_decompress(&cinfo);
+      fclose(fp);
+      return 0;
+    }
   }
+  else bmp=new LICE_MemBitmap(cinfo.output_width,cinfo.output_height);
 
   LICE_pixel *bmpptr = bmp->getBits();
   int dbmpptr=bmp->getRowSpan();
@@ -308,4 +307,4 @@ public:
 
 };
 
-LICE_JPGLoader LICE_jgpldr;
+static LICE_JPGLoader LICE_jgpldr;

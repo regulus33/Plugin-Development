@@ -1,26 +1,7 @@
 /*
-    WDL - resample.h
-    Copyright (C) 2010 and later Cockos Incorporated
-
-    This software is provided 'as-is', without any express or implied
-    warranty.  In no event will the authors be held liable for any damages
-    arising from the use of this software.
-
-    Permission is granted to anyone to use this software for any purpose,
-    including commercial applications, and to alter it and redistribute it
-    freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-       claim that you wrote the original software. If you use this software
-       in a product, an acknowledgment in the product documentation would be
-       appreciated but is not required.
-    2. Altered source versions must be plainly marked as such, and must not be
-       misrepresented as being the original software.
-    3. This notice may not be removed or altered from any source distribution.
-      
-    You may also distribute this software under the LGPL v2 or later.
-
-*/
+** Copyright (C) 2010 Cockos Incorporated
+** LGPL
+**/
 
 #ifndef _WDL_RESAMPLE_H_
 #define _WDL_RESAMPLE_H_
@@ -85,9 +66,9 @@ public:
 
 private:
   void BuildLowPass(double filtpos);
-  void inline SincSample(WDL_ResampleSample *outptr, const WDL_ResampleSample *inptr, double fracpos, int nch, const WDL_SincFilterSample *filter, int filtsz);
-  void inline SincSample1(WDL_ResampleSample *outptr, const WDL_ResampleSample *inptr, double fracpos, const WDL_SincFilterSample *filter, int filtsz);
-  void inline SincSample2(WDL_ResampleSample *outptr, const WDL_ResampleSample *inptr, double fracpos, const WDL_SincFilterSample *filter, int filtsz);
+  void inline SincSample(WDL_ResampleSample *outptr, WDL_ResampleSample *inptr, double fracpos, int nch, WDL_SincFilterSample *filter, int filtsz);
+  void inline SincSample1(WDL_ResampleSample *outptr, WDL_ResampleSample *inptr, double fracpos, WDL_SincFilterSample *filter, int filtsz);
+  void inline SincSample2(WDL_ResampleSample *outptr, WDL_ResampleSample *inptr, double fracpos, WDL_SincFilterSample *filter, int filtsz);
 
   double m_sratein WDL_FIXALIGN;
   double m_srateout;

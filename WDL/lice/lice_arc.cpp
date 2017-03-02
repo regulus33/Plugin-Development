@@ -186,7 +186,7 @@ template <class COMBFUNC> class _LICE_CircleDrawer
 {
 public:
 
-  static void DrawClippedPt(LICE_IBitmap* dest, int x, int y, const int *clip, 
+  static void DrawClippedPt(LICE_IBitmap* dest, int x, int y, int clip[], 
     int r, int g, int b, int a, int alpha, bool doclip)
   {
     if (doclip && (x < clip[0] || x >= clip[2] || y < clip[1] || y >= clip[3])) return;
@@ -194,202 +194,141 @@ public:
     COMBFUNC::doPix((LICE_pixel_chan*)px, r, g, b, a, alpha);
   }
 
-  static void DrawClippedHorzLine(LICE_IBitmap* dest, int y, int xlo, int xhi, const int *clip,
+  static void DrawClippedHorzLine(LICE_IBitmap* dest, int y, int xlo, int xhi, int clip[],
     int r, int g, int b, int a, int alpha, bool doclip)
   {
-    if (doclip) 
-    {
+    if (doclip) {
       if (y < clip[1] || y >= clip[3]) return;
-      xlo = lice_max(xlo, clip[0]);
-      xhi = lice_min(xhi, clip[2]-1);
+      xlo = max(xlo, clip[0]);
+      xhi = min(xhi, clip[2]-1);
     }
     LICE_pixel* px = dest->getBits()+y*dest->getRowSpan()+xlo;
-    while (xlo <= xhi) 
-    {
+    while (xlo <= xhi) {
       COMBFUNC::doPix((LICE_pixel_chan*)px, r, g, b, a, alpha);
       ++px;
       ++xlo;
     }    
   }
 
- static void DrawClippedVertLine(LICE_IBitmap* dest, int x, int ylo, int yhi, const int *clip,
-    int r, int g, int b, int a, int alpha, bool doclip)
-  {
-    if (doclip) 
-    {
-      if (x < clip[0] || x >= clip[2]) return;
-      ylo = lice_max(ylo, clip[1]);
-      yhi = lice_min(yhi, clip[3]-1);
-    }
-    int span=dest->getRowSpan();
-    LICE_pixel* px = dest->getBits()+ylo*span+x;
-    while (ylo <= yhi) 
-    {
-      COMBFUNC::doPix((LICE_pixel_chan*)px, r, g, b, a, alpha);
-      px += span;
-      ++ylo;
-    }    
-  }
-
   static void DrawClippedCircleAA(LICE_IBitmap* dest, float cx, float cy, float rad,
-    const int *clip, LICE_pixel color, int ai, bool filled, bool doclip)
+    int clip[], LICE_pixel color, int ai, bool filled, bool doclip)
   {
     int r = LICE_GETR(color), g = LICE_GETG(color), b = LICE_GETB(color), a = LICE_GETA(color);
-    
-    const int cx0=(int)(cx+0.5f);
-    const int cy0=(int)(cy+0.5f);
 
-    int y=(int)rad;
-    double w=rad-floor(rad);
-    int wa=(int)((double)ai*w);
- 
-    DrawClippedPt(dest, cx0, cy0-y-1, clip, r, g, b, a, wa, doclip);
-    DrawClippedPt(dest, cx0, cy0+y+1, clip, r, g, b, a, wa, doclip);  
-    DrawClippedPt(dest, cx0-y-1, cy0, clip, r, g, b, a, wa, doclip);
-    DrawClippedPt(dest, cx0+y+1, cy0, clip, r, g, b, a, wa, doclip);
-    
-    if (filled)
+    float r2 = rad*rad;
+    float x = 0.0f;
+    float y = rad;
+    while (x < y+1.0f) 
     {
-      DrawClippedVertLine(dest, cx0, cy0-y, cy0-1, clip, r, g, b, a, ai, doclip);
-      DrawClippedVertLine(dest, cx0, cy0+1, cy0+y, clip, r, g, b, a, ai, doclip);
-      DrawClippedHorzLine(dest, cy0, cx0-y, cx0+y, clip, r, g, b, a, ai, doclip);
-    }
-    else
-    {
-      int iwa=ai-wa;
-      DrawClippedPt(dest, cx0, cy0-y, clip, r, g, b, a, iwa, doclip); 
-      DrawClippedPt(dest, cx0+y, cy0, clip, r, g, b, a, iwa, doclip);  
-      DrawClippedPt(dest, cx0, cy0+y, clip, r, g, b, a, iwa, doclip);
-      DrawClippedPt(dest, cx0-y, cy0, clip, r, g, b, a, iwa, doclip);
-    }
+      float w = y-floor(y);
 
-    double r2=rad*rad;
-    double yf=sqrt(r2-1.0);
-    int yl=(int)(yf+0.5);
+      if (w == 0.0f) 
+      { 
+        DrawClippedPt(dest, cx+x, cy+y, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx+x, cy-y, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx-x, cy+y, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx-x, cy-y, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx+y, cy+x, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx+y, cy-x, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx-y, cy+x, clip, r, g, b, a, ai, doclip);
+        DrawClippedPt(dest, cx-y, cy-x, clip, r, g, b, a, ai, doclip);
+      }
+      else 
+      { 
+        int wa = (int)(ai*w);
+        int iwa = ai-wa;
 
-    int x=1;
-    while (x <= yl)
-    {
-      y=(int)yf;
-      w=yf-floor(yf);
-      int wa=(int)((double)ai*w);
+        DrawClippedPt(dest, cx+x, cy+y+1, clip, r, g, b, a, wa, doclip);
+        DrawClippedPt(dest, cx+x, cy+y, clip, r, g, b, a, iwa, doclip);
 
-      DrawClippedPt(dest, cx0-x, cy0-y-1, clip, r, g, b, a, wa, doclip);
-      DrawClippedPt(dest, cx0-x, cy0+y+1, clip, r, g, b, a, wa, doclip);
-      DrawClippedPt(dest, cx0+x, cy0-y-1, clip, r, g, b, a, wa, doclip);
-      DrawClippedPt(dest, cx0+x, cy0+y+1, clip, r, g, b, a, wa, doclip);
-      if (x != yl)
-      {
-        DrawClippedPt(dest, cx0-y-1, cy0-x, clip, r, g, b, a, wa, doclip);
-        DrawClippedPt(dest, cx0+y+1, cy0-x, clip, r, g, b, a, wa, doclip);
-        DrawClippedPt(dest, cx0-y-1, cy0+x, clip, r, g, b, a, wa, doclip);
-        DrawClippedPt(dest, cx0+y+1, cy0+x, clip, r, g, b, a, wa, doclip);
+        DrawClippedPt(dest, cx+x, cy-y+1, clip, r, g, b, a, iwa, doclip);
+        DrawClippedPt(dest, cx+x, cy-y, clip, r, g, b, a, wa, doclip);
+
+        DrawClippedPt(dest, cx-x, cy+y+1, clip, r, g, b, a, wa, doclip);
+        DrawClippedPt(dest, cx-x, cy+y, clip, r, g, b, a, iwa, doclip);
+
+        DrawClippedPt(dest, cx-x, cy-y+1, clip, r, g, b, a, iwa, doclip);
+        DrawClippedPt(dest, cx-x, cy-y, clip, r, g, b, a, wa, doclip);
+
+        DrawClippedPt(dest, cx+y+1, cy+x, clip, r, g, b, a, wa, doclip);
+        DrawClippedPt(dest, cx+y, cy+x, clip, r, g, b, a, iwa, doclip);
+
+        DrawClippedPt(dest, cx+y+1, cy-x, clip, r, g, b, a, wa, doclip);
+        DrawClippedPt(dest, cx+y, cy-x, clip, r, g, b, a, iwa, doclip);
+
+        DrawClippedPt(dest, cx-y+1, cy+x, clip, r, g, b, a, iwa, doclip);
+        DrawClippedPt(dest, cx-y, cy+x, clip, r, g, b, a, wa, doclip);
+
+        DrawClippedPt(dest, cx-y+1, cy-x, clip, r, g, b, a, iwa, doclip);
+        DrawClippedPt(dest, cx-y, cy-x, clip, r, g, b, a, wa, doclip);
       }
 
-      if (filled)
+      if (filled) 
       {
-        DrawClippedVertLine(dest, cx0-x, cy0-y, cy0-x-1, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0-x, cy0+x+1, cy0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0-x, cx0-y, cx0-x, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0-x, cx0+x, cx0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0+x, cx0-y, cx0-x, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0+x, cx0+x, cx0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0+x, cy0-y, cy0-x-1, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0+x, cy0+x+1, cy0+y, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy-y+1, cx-x, cx+x, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy+y, cx-x, cx+x, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy-x, cx-y+1, cx+y, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy+x, cx-y+1, cx+y, clip, r, g, b, a, ai, doclip);
       }
-      else
-      {
-        int iwa=ai-wa;
-        DrawClippedPt(dest, cx0-y, cy0-x, clip, r, g, b, a, iwa, doclip);
-        DrawClippedPt(dest, cx0+y, cy0-x, clip, r, g, b, a, iwa, doclip);     
-        DrawClippedPt(dest, cx0-x, cy0+y, clip, r, g, b, a, iwa, doclip);
-        DrawClippedPt(dest, cx0+x, cy0+y, clip, r, g, b, a, iwa, doclip);
-        if (x != yl) 
-        {
-          DrawClippedPt(dest, cx0-x, cy0-y, clip, r, g, b, a, iwa, doclip);  
-          DrawClippedPt(dest, cx0+x, cy0-y, clip, r, g, b, a, iwa, doclip);
-          DrawClippedPt(dest, cx0-y, cy0+x, clip, r, g, b, a, iwa, doclip);
-          DrawClippedPt(dest, cx0+y, cy0+x, clip, r, g, b, a, iwa, doclip); 
-        }
-      }
-      
-      ++x;
-      yf=sqrt(r2-(double)(x*x));
-      yl=(int)(yf+0.5);
+
+      x += 1;
+      y = sqrt(r2-x*x);
     }
   }
 
   static void DrawClippedCircle(LICE_IBitmap* dest, float cx, float cy, float rad,
-    const int *clip, LICE_pixel color, int ai, bool filled, bool doclip)
+    int clip[], LICE_pixel color, int ai, bool filled, bool doclip)
   {
-    const int r = LICE_GETR(color), g = LICE_GETG(color), b = LICE_GETB(color), a = LICE_GETA(color);
+    int r = LICE_GETR(color), g = LICE_GETG(color), b = LICE_GETB(color), a = LICE_GETA(color);
 
-    const int cx0=(int)(cx+0.5f);
-    const int cy0=(int)(cy+0.5f);
-    const int r0=(int)(rad+0.5f);
-   
-    if (filled)
-    {
-      DrawClippedVertLine(dest, cx0, cy0-r0, cy0-1, clip, r, g, b, a, ai, doclip);
-      DrawClippedVertLine(dest, cx0, cy0+1, cy0+r0, clip, r, g, b, a, ai, doclip);
-      DrawClippedHorzLine(dest, cy0, cx0-r0, cx0+r0, clip, r, g, b, a, ai, doclip);
+    float x = 0.0;
+    float y = rad;
+    float p = (5.0-rad*4.0)/4.0;
+
+    DrawClippedPt(dest, cx, cy+rad, clip, r, g, b, a, ai, doclip);
+    DrawClippedPt(dest, cx, cy-rad, clip, r, g, b, a, ai, doclip);
+    DrawClippedPt(dest, cx+rad, cy, clip, r, g, b, a, ai, doclip);
+    DrawClippedPt(dest, cx-rad, cy, clip, r, g, b, a, ai, doclip);
+
+    if (filled) {
+      DrawClippedHorzLine(dest, cy, cx-rad+1, cx+rad-1, clip, r, g, b, a, ai, doclip);
     }
-    else
-    {
-      DrawClippedPt(dest, cx0, cy0-r0, clip, r, g, b, a, ai, doclip);
-      DrawClippedPt(dest, cx0+r0, cy0, clip, r, g, b, a, ai, doclip);
-      DrawClippedPt(dest, cx0, cy0+r0, clip, r, g, b, a, ai, doclip);
-      DrawClippedPt(dest, cx0-r0, cy0, clip, r, g, b, a, ai, doclip);
-    }  
+    
+    while (x < y) {
+      x += 1.0f;
 
-    int x=0;
-    int y=r0;
-    int e=-r0;
-    while (++x < y)
-    {
-      if (e < 0) 
-      {
-        e += 2*x+1;
+      if (p < 0) {
+        p += 2.0f*x+1.0f;
       }
-      else
-      {
-        --y;
-        e += 2*(x-y)+1;
+      else {
+        y -= 1.0f;
+        p += 2.0*(x-y)+1.0f;
       }
 
-      if (filled)
-      {
-        DrawClippedVertLine(dest, cx0-x, cy0-y, cy0-x-1, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0-x, cy0+x+1, cy0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0-x, cx0-y, cx0-x, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0-x, cx0+x, cx0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0+x, cx0-y, cx0-x, clip, r, g, b, a, ai, doclip);
-        DrawClippedHorzLine(dest, cy0+x, cx0+x, cx0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0+x, cy0-y, cy0-x-1, clip, r, g, b, a, ai, doclip);
-        DrawClippedVertLine(dest, cx0+ x, cy0+x+1, cy0+y, clip, r, g, b, a, ai, doclip);
-      }
-      else
-      {
-        DrawClippedPt(dest, cx0-x, cy0-y, clip, r, g, b, a, ai, doclip);  
-        DrawClippedPt(dest, cx0-x, cy0+y, clip, r, g, b, a, ai, doclip);
-        DrawClippedPt(dest, cx0+x, cy0-y, clip, r, g, b, a, ai, doclip);
-        DrawClippedPt(dest, cx0+x, cy0+y, clip, r, g, b, a, ai, doclip);
-        if (x != y)
-        {
-          DrawClippedPt(dest, cx0-y, cy0-x, clip, r, g, b, a, ai, doclip);
-          DrawClippedPt(dest, cx0-y, cy0+x, clip, r, g, b, a, ai, doclip);
-          DrawClippedPt(dest, cx0+y, cy0-x, clip, r, g, b, a, ai, doclip);
-          DrawClippedPt(dest, cx0+y, cy0+x, clip, r, g, b, a, ai, doclip); 
-        }
+      DrawClippedPt(dest, cx+x, cy+y, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx-x, cy+y, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx+x, cy-y, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx-x, cy-y, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx+y, cy+x, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx-y, cy+x, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx+y, cy-x, clip, r, g, b, a, ai, doclip);
+      DrawClippedPt(dest, cx-y, cy-x, clip, r, g, b, a, ai, doclip);
+
+      if (filled) {
+        DrawClippedHorzLine(dest, cy-y, cx-x+1, cx+x-1, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy+y, cx-x+1, cx+x-1, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy-x, cx-y+1, cx+y-1, clip, r, g, b, a, ai, doclip);
+        DrawClippedHorzLine(dest, cy+x, cx-y+1, cx+y-1, clip, r, g, b, a, ai, doclip);
       }
     }
   }
+
 
 };
 
 
 static void __DrawCircleClipped(LICE_IBitmap* dest, float cx, float cy, float rad,
-  LICE_pixel color, int ia, bool aa, bool filled, int mode, const int *clip, bool doclip)
+  LICE_pixel color, int ia, bool aa, bool filled, int mode, int *clip, bool doclip)
 {
   // todo: more clipped/filled versions (to optimize constants out?)
   if (aa) 
@@ -407,45 +346,46 @@ static void __DrawCircleClipped(LICE_IBitmap* dest, float cx, float cy, float ra
 }
 
 
-static void __DrawArc(int w, int h, LICE_IBitmap* dest, float cx, float cy, float rad, double anglo, double anghi,
+static void __DrawArc(int w, int h, LICE_IBitmap* dest, float cx, float cy, float rad, float anglo, float anghi,
   LICE_pixel color, int ialpha, bool aa, int mode)
 {
   // -2PI <= anglo <= anghi <= 2PI
-  anglo += 2.0*_PI;
-  anghi += 2.0*_PI;
 
-  // 0 <= anglo <= anghi <= 4PI
-
-  double next_ang = anglo - fmod(anglo,0.5*_PI);
-
-  int ly = (int)(cy - rad*cos(anglo) + 0.5);
-  int lx = (int)(cx + rad*sin(anglo) + 0.5);
-
-  while (anglo < anghi)
-  {
-    next_ang += 0.5*_PI;
-    if (next_ang > anghi) next_ang = anghi;
-
-    int yhi = (int) (cy-rad*cos(next_ang)+0.5);
-    int xhi = (int) (cx+rad*sin(next_ang)+0.5);
-    int ylo = ly;
-    int xlo = lx;
-
-    ly = yhi;
-    lx = xhi;
-    
-    if (yhi < ylo) { int tmp = ylo; ylo = yhi; yhi=tmp; }  
-    if (xhi < xlo) { int tmp = xlo; xlo = xhi; xhi=tmp; }
-
-    anglo = next_ang;
-
-    if (xhi != cx) xhi++;
-    if (yhi != cy) yhi++;
-
-    const int clip[4]={lice_max(xlo,0),lice_max(0, ylo),lice_min(w,xhi+1),lice_min(h, yhi+1)};
-
-    __DrawCircleClipped(dest,cx,cy,rad,color,ialpha,aa,false,mode,clip,true);
+  if (anglo < -_PI && anghi > -_PI)
+  {   
+    __DrawArc(w,h,dest, cx, cy, rad, anglo, -_PI, color, ialpha, aa,mode);
+    anglo=-_PI;
   }
+     
+  if (anglo < 0.0f && anghi > 0.0f)
+  {   
+    __DrawArc(w,h,dest, cx, cy, rad, anglo+2.0f*_PI, 2.0f*_PI, color, ialpha, aa,mode);
+    anglo=0.0f;
+  }
+  
+  if (anglo < _PI && anghi > _PI)
+  {
+    __DrawArc(w,h,dest, cx, cy, rad, anglo, _PI, color, ialpha, aa,mode);
+    anglo=_PI;
+  }
+
+  int ylo = (int) (cy-rad*cos(anglo)+0.5);
+  int yhi = (int) (cy-rad*cos(anghi)+0.5);
+    
+  if (yhi < ylo) { int tmp = ylo; ylo = yhi; yhi=tmp; }
+  
+  int clip[4]={0,max(0, ylo),w,min(h, yhi+1)};
+
+  if (anglo < -_PI || (anglo >= 0.0f && anglo < _PI))
+  {
+    if (cx>0) clip[0]=cx;
+  }
+  else
+  {
+    if (cx<w) clip[2]=cx;
+  }
+
+  __DrawCircleClipped(dest,cx,cy,rad,color,ialpha,aa,false,mode,clip,true);
 }
 
 void LICE_Arc(LICE_IBitmap* dest, float cx, float cy, float r, float minAngle, float maxAngle, 
@@ -495,22 +435,17 @@ void LICE_Arc(LICE_IBitmap* dest, float cx, float cy, float r, float minAngle, f
 void LICE_Circle(LICE_IBitmap* dest, float cx, float cy, float r, LICE_pixel color, float alpha, int mode, bool aa)
 {
   if (!dest) return;
-
-  const int w = dest->getWidth(), h = dest->getHeight();
-  const int clip[4] = { 0, 0, w, h };
-  if (w < 1 || h <1 || r<0 || 
-      (int)cx+(int)r < -2 || (int)cy + (int)r < - 2 ||
-      (int)cx-(int)r > w + 2 || (int)cy - (int)r > h + 2
-    ) return;
-
   if (CachedCircle(dest, cx, cy, r, color, alpha, mode, aa)) return;  
 
-  if (dest->isFlipped()) cy=h-1-cy;
+  if (dest->isFlipped()) cy=dest->getHeight()-1-cy;
 
   int ia = (int) (alpha*256.0f);
   if (!ia) return;
 
-  const bool doclip = !(cx-r-2 >= 0 && cy-r-2 >= 0 && cx+r+2 < w && cy+r+2 < h);
+  int w = dest->getWidth(), h = dest->getHeight();
+  int clip[4] = { 0, 0, w, h };
+
+  bool doclip = (cx-r-1 < 0 || cy-r-1 < 0 || cx+r+1 >= w || cy+r+1 >= h);
 
   __DrawCircleClipped(dest,cx,cy,r,color,ia,aa,false,mode,clip,doclip);
 }
@@ -520,17 +455,12 @@ void LICE_FillCircle(LICE_IBitmap* dest, float cx, float cy, float r, LICE_pixel
   if (!dest) return;
   if (dest->isFlipped()) cy=dest->getHeight()-1-cy;
 
-  const int ia = (int) (alpha*256.0f);
+  int ia = (int) (alpha*256.0f);
   if (!ia) return;
-  const int w = dest->getWidth(), h = dest->getHeight();
-  if (w < 1 || h < 1 || r < 0.0 || 
-      (int)cx+(int)r < -2 || (int)cy + (int)r < - 2 ||
-      (int)cx-(int)r > w + 2 || (int)cy - (int)r > h + 2
-      ) return;
+  int w = dest->getWidth(), h = dest->getHeight();
+  int clip[4] = { 0, 0, w, h };
 
-  const int clip[4] = { 0, 0, w, h };
-
-  const bool doclip = !(cx-r-2 >= 0 && cy-r-2 >= 0 && cx+r+2 < w && cy+r+2 < h);
+  bool doclip = (cx-r-1 < 0 || cy-r-1 < 0 || cx+r+1 >= w || cy+r+1 >= h);
   __DrawCircleClipped(dest,cx,cy,r,color,ia,aa,true,mode,clip,doclip);
 }
 

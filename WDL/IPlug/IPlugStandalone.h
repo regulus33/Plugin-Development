@@ -22,7 +22,16 @@
     RtMidiOut* mRTMidiOut;
     unsigned short* mMidiOutChan; // 0 = any, 1 = midi chan 1
   };
-
+  
+#elif defined OS_IOS
+  #include "IOSLink.h"
+  
+  struct IPlugInstanceInfo
+  {
+    WDL_String mIOSBundleID;
+    IOSLink* mIOSLink;
+    unsigned short* mMidiOutChan; // 0 = any, 1 = midi chan 1
+  };
 #endif
 
 class IPlugStandalone : public IPlugBase
@@ -57,17 +66,26 @@ public:
 
   void ResizeGraphics(int w, int h);
 
+  #ifdef OS_IOS
+  void LockMutexAndProcessSingleReplacing(float** inputs, float** outputs, int nFrames);
+  #else
   void LockMutexAndProcessDoubleReplacing(double** inputs, double** outputs, int nFrames);
+  #endif
 
 protected:
   bool SendMidiMsg(IMidiMsg* pMsg);
-  bool SendSysEx(ISysEx* pSysEx);
 
 private:
+  bool mDoesMidi;
+
+  #ifdef OS_IOS
+  IOSLink* mIOSLink;
+  #else // OSX or WIN
   RtMidiOut* mMidiOut;
   unsigned short* mMidiOutChan;
+  #endif
 };
 
-IPlugStandalone* MakePlug(void* pMidiOutput, unsigned short* pMidiOutChan);
+IPlugStandalone* MakePlug(void* pMidiOutput, unsigned short* pMidiOutChan, void* pIOSLink =  NULL);
 
 #endif

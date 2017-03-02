@@ -71,6 +71,7 @@ private:
   VstSpeakerArrangement mInputSpkrArr, mOutputSpkrArr;
 
   bool mHostSpecificInitDone;
+  bool mDoesMidi;
 
   enum { VSTEXT_NONE=0, VSTEXT_COCKOS, VSTEXT_COCOA }; // list of VST extensions supported by host
   int mHasVSTExtensions;

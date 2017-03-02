@@ -54,7 +54,8 @@ public:
   // Default passthrough.  Inputs and outputs are [nChannel][nSample].
   // Mutex is already locked.
   virtual void ProcessDoubleReplacing(double** inputs, double** outputs, int nFrames);
-  
+  virtual void ProcessSingleReplacing(float** inputs, float** outputs, int nFrames);
+
   // In case the audio processing thread needs to do anything when the GUI opens
   // (like for example, set some state dependent initial values for controls).
   virtual void OnGUIOpen() { TRACE; }
@@ -83,7 +84,9 @@ public:
   // Only used by RTAS & AAX, override in plugins that do chunks
   virtual bool CompareState(const unsigned char* incomingState, int startPos);
   
+  #ifndef OS_IOS
   virtual void OnWindowResize() {}
+  #endif
   // implement this and return true to trigger your custom about box, when someone clicks about in the menu of a standalone
   virtual bool HostRequestingAboutBox() { return false; }
 
@@ -149,8 +152,6 @@ public:
   void GetHostVersionStr(char* str);
   const char* GetArchString();
   
-  int GetTailSize() { return mTailSize; }
-  
   // Tell the host that the graphics resized.
   // Should be called only by the graphics object when it resizes itself.
   virtual void ResizeGraphics(int w, int h) = 0;
@@ -190,21 +191,17 @@ protected:
 
   void SetHost(const char* host, int version);   // Version = 0xVVVVRRMM.
   virtual void HostSpecificInit() { return; };
+  #ifndef OS_IOS
   virtual void AttachGraphics(IGraphics* pGraphics);
+  #endif
 
   // If latency changes after initialization (often not supported by the host).
   virtual void SetLatency(int samples);
-  
-  // set to 0xffffffff for infinite tail (VST3), or 0 for none (default)
-  // for VST2 setting to 1 means no tail, but it would be better i think to leave it at 0, the default
-  void SetTailSize(unsigned int tailSizeSamples) { mTailSize = tailSizeSamples; }
-  
   virtual bool SendMidiMsg(IMidiMsg* pMsg) = 0;
   bool SendMidiMsgs(WDL_TypedBuf<IMidiMsg>* pMsgs);
   virtual bool SendSysEx(ISysEx* pSysEx) { return false; }
   bool IsInst() { return mIsInst; }
-  bool DoesMIDI() { return mDoesMIDI; }
-  
+
   // You can't use these three methods with chunks-based plugins, because there is no way to set the custom data
   void MakeDefaultPreset(char* name = 0, int nPresets = 1);
   // MakePreset(name, param1, param2, ..., paramN)
@@ -223,7 +220,9 @@ protected:
   bool SerializeParams(ByteChunk* pChunk);
   int UnserializeParams(ByteChunk* pChunk, int startPos); // Returns the new chunk position (endPos)
 
+  #ifndef OS_IOS
   virtual void RedrawParamControls();  // Called after restoring state.
+  #endif
 
   // ----------------------------------------
   // Internal IPlug stuff (but API classes need to get at it).
@@ -266,15 +265,15 @@ public:
   // Dump the current state as source code for a call to MakePresetFromNamedParams / MakePresetFromBlob
   void DumpPresetSrcCode(const char* filename, const char* paramEnumNames[]);
   void DumpPresetBlob(const char* filename);
-  void DumpBankBlob(const char* filename);
-  
+
   virtual void PresetsChangedByHost() {} // does nothing by default
   void DirtyParameters(); // hack to tell the host to dirty file state, when a preset is recalled
-  
-  bool SaveProgramAsFXP(WDL_String* fileName);
-  bool SaveBankAsFXB(WDL_String* fileName);
-  bool LoadProgramFromFXP(WDL_String* fileName);
-  bool LoadBankFromFXB(WDL_String* fileName);
+  #ifndef OS_IOS
+  bool SaveProgramAsFXP(const char* defaultFileName = "");
+  bool SaveBankAsFXB(const char* defaultFileName = "");
+  bool LoadProgramFromFXP();
+  bool LoadBankFromFXB();
+  #endif
   
   void SetSampleRate(double sampleRate);
   virtual void SetBlockSize(int blockSize); // overridden in IPlugAU
@@ -315,11 +314,11 @@ private:
   };
 
 protected:
-  bool mStateChunks, mIsInst, mDoesMIDI, mIsBypassed;
+  bool mStateChunks, mIsInst, mIsBypassed;
   int mCurrentPresetIdx;
   double mSampleRate;
   int mBlockSize, mLatency;
-  unsigned int mTailSize;
+  WDL_String mPreviousPath; // for saving/loading fxps
   NChanDelayLine* mDelay; // for delaying dry signal when mLatency > 0 and plugin is bypassed
   WDL_PtrList<const char> mParamGroups;
 

@@ -11,10 +11,6 @@
 // WDL_AssocArrayImpl can be used on its own, and can contain structs for keys or values
 template <class KEY, class VAL> class WDL_AssocArrayImpl 
 {
-  WDL_AssocArrayImpl(const WDL_AssocArrayImpl &cp) { CopyContents(cp); }
-
-  WDL_AssocArrayImpl &operator=(const WDL_AssocArrayImpl &cp) { CopyContents(cp); return *this; }
-
 public:
 
   explicit WDL_AssocArrayImpl(int (*keycmp)(KEY *k1, KEY *k2), KEY (*keydup)(KEY)=0, void (*keydispose)(KEY)=0, void (*valdispose)(VAL)=0)
@@ -30,7 +26,7 @@ public:
     DeleteAll();
   }
 
-  VAL* GetPtr(KEY key, KEY *keyPtrOut=NULL) const
+  VAL* GetPtr(KEY key, KEY *keyPtrOut=NULL)
   {
     bool ismatch = false;
     int i = LowerBound(key, &ismatch);
@@ -43,14 +39,14 @@ public:
     return 0;
   }
 
-  bool Exists(KEY key) const
+  bool Exists(KEY key)
   {
     bool ismatch = false;
     LowerBound(key, &ismatch);
     return ismatch;
   }
 
-  int Insert(KEY key, VAL val)
+  void Insert(KEY key, VAL val, KEY *keyPtrOut=NULL) 
   {
     bool ismatch = false;
     int i = LowerBound(key, &ismatch);
@@ -59,16 +55,17 @@ public:
       KeyVal* kv = m_data.Get()+i;
       if (m_valdispose) m_valdispose(kv->val);
       kv->val = val;
+      if (keyPtrOut) *keyPtrOut = kv->key;
     }
     else
     {
       KeyVal* kv = m_data.Resize(m_data.GetSize()+1)+i;
-      memmove(kv+1, kv, (m_data.GetSize()-i-1)*(unsigned int)sizeof(KeyVal));
+      memmove(kv+1, kv, (m_data.GetSize()-i-1)*sizeof(KeyVal));
       if (m_keydup) key = m_keydup(key);
       kv->key = key;
-      kv->val = val;      
+      kv->val = val;
+      if (keyPtrOut) *keyPtrOut = key;
     }
-    return i;
   }
 
   void Delete(KEY key) 
@@ -80,18 +77,20 @@ public:
       KeyVal* kv = m_data.Get()+i;
       if (m_keydispose) m_keydispose(kv->key);
       if (m_valdispose) m_valdispose(kv->val);
-      m_data.Delete(i);
+      memmove(kv, kv+1, (m_data.GetSize()-i-1)*sizeof(KeyVal));
+      m_data.Resize(m_data.GetSize()-1);
     }
   }
 
   void DeleteByIndex(int idx)
   {
-    if (idx >= 0 && idx < m_data.GetSize())
+    if (idx>=0&&idx<GetSize())
     {
       KeyVal* kv = m_data.Get()+idx;
       if (m_keydispose) m_keydispose(kv->key);
       if (m_valdispose) m_valdispose(kv->val);
-      m_data.Delete(idx);
+      memmove(kv, kv+1, (m_data.GetSize()-idx-1)*sizeof(KeyVal));
+      m_data.Resize(m_data.GetSize()-1);
     }
   }
 
@@ -110,12 +109,12 @@ public:
     m_data.Resize(0, resizedown);
   }
 
-  int GetSize() const
+  int GetSize()
   {
     return m_data.GetSize();
   }
 
-  VAL* EnumeratePtr(int i, KEY* key=0) const
+  VAL* EnumeratePtr(int i, KEY* key=0)
   {
     if (i >= 0 && i < m_data.GetSize()) 
     {
@@ -126,7 +125,7 @@ public:
     return 0;
   }
   
-  KEY* ReverseLookupPtr(VAL val) const
+  KEY* ReverseLookupPtr(VAL val)
   {
     int i;
     for (i = 0; i < m_data.GetSize(); ++i)
@@ -148,18 +147,6 @@ public:
       if (m_keydup) newkey = m_keydup(newkey);
       kv->key = newkey;
       Resort();
-    }
-  }
-
-  void ChangeKeyByIndex(int idx, KEY newkey, bool needsort)
-  {
-    if (idx >= 0 && idx < m_data.GetSize())
-    {
-      KeyVal* kv = m_data.Get()+idx;
-      if (m_keydispose) m_keydispose(kv->key);
-      if (m_keydup) newkey = m_keydup(newkey);
-      kv->key = newkey;
-      if (needsort) Resort();
     }
   }
 
@@ -195,7 +182,7 @@ public:
     }
   }
 
-  int LowerBound(KEY key, bool* ismatch) const
+  int LowerBound(KEY key, bool* ismatch)
   {
     int a = 0;
     int c = m_data.GetSize();
@@ -216,7 +203,7 @@ public:
     return a;
   }
 
-  int GetIdx(KEY key) const
+  int GetIdx(KEY key)
   {
     bool ismatch=false;
     int i = LowerBound(key, &ismatch);
@@ -229,36 +216,7 @@ public:
     m_data.SetGranul(gran);
   }
 
-  void CopyContents(const WDL_AssocArrayImpl &cp)
-  {
-    m_data=cp.m_data;
-    m_keycmp = cp.m_keycmp;
-    m_keydup = cp.m_keydup; 
-    m_keydispose = m_keydup ? cp.m_keydispose : NULL;
-    m_valdispose = NULL; // avoid disposing of values twice, since we don't have a valdup, we can't have a fully valid copy
-    if (m_keydup)
-    {
-      int x;
-      const int n=m_data.GetSize();
-      for (x=0;x<n;x++)
-      {
-        KeyVal *kv=m_data.Get()+x;
-        if (kv->key) kv->key = m_keydup(kv->key);
-      }
-    }
-  }
-
-  void CopyContentsAsReference(const WDL_AssocArrayImpl &cp)
-  {
-    DeleteAll(true);
-    m_keydup = NULL;  // this no longer can own any data
-    m_keydispose = NULL;
-    m_valdispose = NULL; 
-
-    m_data=cp.m_data;
-  }
-
-protected:
+private:
 
   struct KeyVal
   {
@@ -285,21 +243,21 @@ public:
   { 
   }
 
-  VAL Get(KEY key, VAL notfound=0) const
+  VAL Get(KEY key, VAL notfound=0)  
   {
     VAL* p = this->GetPtr(key);
     if (p) return *p;
     return notfound;
   }
 
-  VAL Enumerate(int i, KEY* key=0, VAL notfound=0) const
+  VAL Enumerate(int i, KEY* key=0, VAL notfound=0)
   {
     VAL* p = this->EnumeratePtr(i, key);
     if (p) return *p;
     return notfound; 
   }
 
-  KEY ReverseLookup(VAL val, KEY notfound=0) const
+  KEY ReverseLookup(VAL val, KEY notfound=0)
   {
     KEY* p=this->ReverseLookupPtr(val);
     if (p) return *p;
@@ -329,109 +287,15 @@ public:
   
   ~WDL_StringKeyedArray() { }
 
-  static const char *dupstr(const char *s) { return strdup(s);  } // these might not be necessary but depending on the libc maybe...
-  static int cmpstr(const char **s1, const char **s2) { return strcmp(*s1, *s2); }
-  static int cmpistr(const char **a, const char **b) { return stricmp(*a,*b); }
-  static void freestr(const char* s) { free((void*)s); }
-  static void freecharptr(char *p) { free(p); }
-};
-
-
-template <class VAL> class WDL_StringKeyedArray2 : public WDL_AssocArrayImpl<const char *, VAL>
-{
-public:
-
-  explicit WDL_StringKeyedArray2(bool caseSensitive=true, void (*valdispose)(VAL)=0) : WDL_AssocArrayImpl<const char*, VAL>(caseSensitive?cmpstr:cmpistr, dupstr, freestr, valdispose) {}
-  
-  ~WDL_StringKeyedArray2() { }
-
-  static const char *dupstr(const char *s) { return strdup(s);  } // these might not be necessary but depending on the libc maybe...
-  static int cmpstr(const char **s1, const char **s2) { return strcmp(*s1, *s2); }
-  static int cmpistr(const char **a, const char **b) { return stricmp(*a,*b); }
-  static void freestr(const char* s) { free((void*)s); }
-  static void freecharptr(char *p) { free(p); }
-};
-
-// sorts text as text, sorts anything that looks like a number as a number
-template <class VAL> class WDL_LogicalSortStringKeyedArray : public WDL_StringKeyedArray<VAL>
-{
-public:
-
-  explicit WDL_LogicalSortStringKeyedArray(bool caseSensitive=true, void (*valdispose)(VAL)=0) : WDL_StringKeyedArray<VAL>(caseSensitive, valdispose) 
-  {
-    WDL_StringKeyedArray<VAL>::m_keycmp = caseSensitive?cmpstr:cmpistr; // override
-  }
-  
-  ~WDL_LogicalSortStringKeyedArray() { }
-
 private:
 
-  static int cmpstr(const char **a, const char **b) { return _cmpstr(*a, *b, true); }
-  static int cmpistr(const char **a, const char **b) { return _cmpstr(*a, *b, false); }
+  static const char *dupstr(const char *s) { return strdup(s);  } // these might not be necessary but depending on the libc maybe...
+  static int cmpstr(const char **s1, const char **s2) { return strcmp(*s1, *s2); }
+  static int cmpistr(const char **a, const char **b) { return stricmp(*a,*b); }
+  static void freestr(const char* s) { free((void*)s); }
 
-  static int _cmpstr(const char *s1, const char *s2, bool case_sensitive)
-  {
-    // this also exists as WDL_strcmp_logical in wdlcstring.h
-    char lastNonZeroChar=0;
-    // last matching character, updated if not 0. this allows us to track whether
-    // we are inside of a number with the same leading digits
-
-    for (;;)
-    {
-      char c1=*s1++, c2=*s2++;
-      if (!c1) return c1-c2;
-      
-      if (c1!=c2)
-      {
-        if (c1 >= '0' && c1 <= '9' && c2 >= '0' && c2 <= '9')
-        {
-          int lzdiff=0, cnt=0;
-          if (lastNonZeroChar < '1' || lastNonZeroChar > '9')
-          {
-            while (c1 == '0') { c1=*s1++; lzdiff--; }
-            while (c2 == '0') { c2=*s2++; lzdiff++; } // lzdiff = lz2-lz1, more leading 0s = earlier in list
-          }
-
-          for (;;)
-          {
-            if (c1 >= '0' && c1 <= '9')
-            {
-              if (c2 < '0' || c2 > '9') return 1;
-
-              c1=s1[cnt];
-              c2=s2[cnt++];
-            }
-            else
-            {
-              if (c2 >= '0' && c2 <= '9') return -1;
-              break;
-            }
-          }
-
-          s1--;
-          s2--;
-        
-          while (cnt--)
-          {
-            const int d = *s1++ - *s2++;
-            if (d) return d;
-          }
-
-          if (lzdiff) return lzdiff;
-        }
-        else
-        {
-          if (!case_sensitive)
-          {
-            if (c1>='a' && c1<='z') c1+='A'-'a';
-            if (c2>='a' && c2<='z') c2+='A'-'a';
-          }
-          if (c1 != c2) return c1-c2;
-        }
-      }
-      else if (c1 != '0') lastNonZeroChar=c1;
-    }
-  }
+public:
+  static void freecharptr(char *p) { free(p); }
 };
 
 
@@ -445,7 +309,7 @@ public:
 
 private:
   
-  static int cmpptr(INT_PTR* a, INT_PTR* b) { const INT_PTR d = *a - *b; return d<0?-1:(d!=0); }
+  static int cmpptr(INT_PTR* a, INT_PTR* b) { return *a-*b; }
 };
 
 

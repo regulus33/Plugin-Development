@@ -33,8 +33,8 @@
 
 static int MacKeyCodeToVK(int code)
 {
-  switch (code)
-  {
+	switch (code)
+	{
     case 51: return VK_BACK;
     case 65: return VK_DECIMAL;
     case 67: return VK_MULTIPLY;
@@ -62,90 +62,32 @@ static int MacKeyCodeToVK(int code)
     case 101: return VK_F9;
     case 109: return VK_F10;
     case 103: return VK_F11;
+    case 105: return VK_SNAPSHOT;
     case 111: return VK_F12;
     case 114: return VK_INSERT;
-    case 115: return VK_HOME;
+		case 115: return VK_HOME;
     case 117: return VK_DELETE;
-    case 116: return VK_PRIOR;
+		case 116: return VK_PRIOR;
     case 118: return VK_F4;
-    case 119: return VK_END;
+		case 119: return VK_END;
     case 120: return VK_F2;
-    case 121: return VK_NEXT;
+		case 121: return VK_NEXT;
     case 122: return VK_F1;
-    case 123: return VK_LEFT;
-    case 124: return VK_RIGHT;
-    case 125: return VK_DOWN;
-    case 126: return VK_UP;
-    case 0x69: return VK_F13;
-    case 0x6B: return VK_F14;
-    case 0x71: return VK_F15;
-    case 0x6A: return VK_F16;
-  }
-  return 0;
+		case 123: return VK_LEFT;
+		case 124: return VK_RIGHT;
+		case 125: return VK_DOWN;
+		case 126: return VK_UP;
+	}
+	return 0;
 }
 
 bool IsRightClickEmulateEnabled();
 
-#ifdef MAC_OS_X_VERSION_10_5
 
-static int charFromVcode(int keyCode) // used for getting the root char (^, `) from dead keys on other keyboards,
-                                       // only used when using MacKeyToWindowsKeyEx() with mode=1, for now 
-{
-  static char loaded;
-  static TISInputSourceRef (*_TISCopyCurrentKeyboardInputSource)( void);
-  static void* (*_TISGetInputSourceProperty) ( TISInputSourceRef inputSource, CFStringRef propertyKey);
-
-  if (!loaded)
-  {
-    loaded++;
-    CFBundleRef b = CFBundleGetBundleWithIdentifier(CFSTR("com.apple.Carbon"));
-    if (b)
-    {
-      *(void **)&_TISGetInputSourceProperty = CFBundleGetFunctionPointerForName(b,CFSTR("TISGetInputSourceProperty"));
-      *(void **)&_TISCopyCurrentKeyboardInputSource = CFBundleGetFunctionPointerForName(b,CFSTR("TISCopyCurrentKeyboardInputSource"));
-    }
-  }
-  if (!_TISCopyCurrentKeyboardInputSource || !_TISGetInputSourceProperty) return 0;
-  
-  TISInputSourceRef currentKeyboard = _TISCopyCurrentKeyboardInputSource();
-  CFDataRef uchr = (CFDataRef)_TISGetInputSourceProperty(currentKeyboard, CFSTR("TISPropertyUnicodeKeyLayoutData"));
-  const UCKeyboardLayout *keyboardLayout = (const UCKeyboardLayout*)CFDataGetBytePtr(uchr);
-
-  if(keyboardLayout)
-  {
-    UInt32 deadKeyState = 0;
-    UniCharCount maxStringLength = 255;
-    UniCharCount actualStringLength = 0;
-    UniChar unicodeString[maxStringLength];
-
-    OSStatus status = UCKeyTranslate(keyboardLayout,
-                                     keyCode, kUCKeyActionDown, 0,
-                                     LMGetKbdType(), 0,
-                                     &deadKeyState,
-                                     maxStringLength,
-                                     &actualStringLength, unicodeString);
-
-    if (actualStringLength == 0 && deadKeyState)
-    {
-        status = UCKeyTranslate(keyboardLayout,
-                                         kVK_Space, kUCKeyActionDown, 0,
-                                         LMGetKbdType(), 0,
-                                         &deadKeyState,
-                                         maxStringLength,
-                                         &actualStringLength, unicodeString);   
-    }
-    if(actualStringLength > 0 && status == noErr) return unicodeString[0]; 
-  }
-  return 0;
-}
-#endif
-
-int SWELL_MacKeyToWindowsKeyEx(void *nsevent, int *flags, int mode)
+int SWELL_MacKeyToWindowsKey(void *nsevent, int *flags)
 {
   NSEvent *theEvent = (NSEvent *)nsevent;
-  if (!theEvent) theEvent = [NSApp currentEvent];
-
-  int mod=[theEvent modifierFlags];// & ( NSShiftKeyMask|NSControlKeyMask|NSAlternateKeyMask|NSCommandKeyMask);
+	int mod=[theEvent modifierFlags];// & ( NSShiftKeyMask|NSControlKeyMask|NSAlternateKeyMask|NSCommandKeyMask);
                                    //	if ([theEvent isARepeat]) return;
     
   int flag=0;
@@ -159,36 +101,20 @@ int SWELL_MacKeyToWindowsKeyEx(void *nsevent, int *flags, int mode)
   int code=MacKeyCodeToVK(rawcode);
   if (!code)
   {
-    NSString *str=NULL;
-    if (mode == 1) str=[theEvent characters];
-
-    if (!str || ![str length]) str=[theEvent charactersIgnoringModifiers];
+    NSString *str=[theEvent charactersIgnoringModifiers];
+//    if (!str || ![str length]) str=[theEvent characters];
 
     if (!str || ![str length]) 
     {
-    #ifdef MAC_OS_X_VERSION_10_5
-      if (mode==1) code=charFromVcode(rawcode);
-    #endif
-      if (!code)
-      {
-        code = 1024+rawcode; // raw code
-        flag|=FVIRTKEY;
-      }
+      code = 1024+rawcode; // raw code
+      flag|=FVIRTKEY;
     }
     else
     {
       code=[str characterAtIndex:0];
-      if (code >= NSF1FunctionKey && code <= NSF24FunctionKey)
-      {
-        flag|=FVIRTKEY;
-        code += VK_F1 - NSF1FunctionKey;
-      }
-      else 
-      {
-        if (code >= 'a' && code <= 'z') code+='A'-'a';
-        if (code == 25 && (flag&FSHIFT)) code=VK_TAB;
-        if (isalnum(code)||code==' ' || code == '\r' || code == '\n' || code ==27 || code == VK_TAB) flag|=FVIRTKEY;
-      }
+      if (code >= 'a' && code <= 'z') code+='A'-'a';
+      if (code == 25 && (flag&FSHIFT)) code=VK_TAB;
+      if (isalnum(code)||code==' ' || code == '\r' || code == '\n' || code ==27 || code == VK_TAB) flag|=FVIRTKEY;
     }
   }
   else
@@ -201,12 +127,6 @@ int SWELL_MacKeyToWindowsKeyEx(void *nsevent, int *flags, int mode)
   
   if (flags) *flags=flag;
   return code;
-}
-
-int SWELL_MacKeyToWindowsKey(void *nsevent, int *flags)
-{
-  if (!nsevent) return 0;
-  return SWELL_MacKeyToWindowsKeyEx(nsevent,flags,0);
 }
 
 int SWELL_KeyToASCII(int wParam, int lParam, int *newflags)
@@ -259,7 +179,7 @@ WORD GetAsyncKeyState(int key)
 }
 
 
-static SWELL_CursorResourceIndex *SWELL_curmodule_cursorresource_head;
+SWELL_CursorResourceIndex *SWELL_curmodule_cursorresource_head;
 
 static NSCursor* MakeCursorFromData(unsigned char* data, int hotspot_x, int hotspot_y)
 {
@@ -293,7 +213,7 @@ static NSCursor* MakeCursorFromData(unsigned char* data, int hotspot_x, int hots
       if (img)
       {
         [img addRepresentation:bmp];  
-        NSPoint hs = NSMakePoint(hotspot_x, hotspot_y);
+        NSPoint hs = { hotspot_x, hotspot_y };
         c = [[NSCursor alloc] initWithImage:img hotSpot:hs];
         [img release];
       }   
@@ -449,8 +369,9 @@ static NSImage *swell_imageFromCursorString(const char *name, POINT *hotSpot)
       static char tempfn[512];
       if (!tempfn[0])
       {
-        GetTempPath(256,tempfn);
-        snprintf(tempfn+strlen(tempfn),256,"swellcur%x%x.ico", timeGetTime(),(int)getpid());
+        const char *p = getenv("TEMP");
+        if  (!p || !*p) p="/tmp";
+        sprintf(tempfn,"%.200s/swellcur%x%x.ico",p,timeGetTime(),(int)getpid());
       }
       
       FILE *outfp = fopen(tempfn,"wb");
@@ -674,19 +595,6 @@ BOOL SWELL_SetCursorPos(int X, int Y)
   CGPoint pos=CGPointMake(X,h-Y);
   return CGWarpMouseCursorPosition(pos)==kCGErrorSuccess;
 }
-
-void SWELL_Register_Cursor_Resource(const char *idx, const char *name, int hotspot_x, int hotspot_y)
-{
-  SWELL_CursorResourceIndex *ri = (SWELL_CursorResourceIndex*)malloc(sizeof(SWELL_CursorResourceIndex));
-  ri->hotspot.x = hotspot_x;
-  ri->hotspot.y = hotspot_y;
-  ri->resname=name;
-  ri->cachedCursor=0;
-  ri->resid = idx;
-  ri->_next = SWELL_curmodule_cursorresource_head;
-  SWELL_curmodule_cursorresource_head = ri;
-}
-
 
 
 

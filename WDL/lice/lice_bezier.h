@@ -63,20 +63,31 @@ T LICE_Bezier_GetY(T ctrl_x1, T ctrl_x2, T ctrl_x3, T ctrl_y1, T ctrl_y2, T ctrl
     return ctrl_y3;
   }
 
-  double t, a = (double) ctrl_x1 - (double) (2 * ctrl_x2) + (double) ctrl_x3;
-  if (a == 0.0)
+  double a = (double) ctrl_x1 - (double) (2 * ctrl_x2) + (double) ctrl_x3;
+  if (a == 0.0)   // linear
   { 
-    t=(ctrl_x1 == ctrl_x3) ? 0.0 : (x-ctrl_x1)/(ctrl_x3-ctrl_x1);
+    T y = ctrl_y1;
+    double t = 0.0;
+    if (ctrl_x1 != ctrl_x3) 
+    {
+      t = (x-ctrl_x1)/(ctrl_x3-ctrl_x1);
+      y += t*(ctrl_y3-ctrl_y1);      
+    }
+    if (pt) *pt = t;
+    return y;
   }
-  else
-  {
-    t = (double) (ctrl_x2 - ctrl_x1);
-    t = (-t + sqrt(t * t - a * (ctrl_x1 - x))) / a;
-  }
-  const double it = 1.0 - t;
+
+  double b = (double) (2 * (ctrl_x2 - ctrl_x1));
+  double c = (double) (ctrl_x1 - x);
+  double t = (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
+  double it = 1.0 - t;
+
+  a = it * it;
+  b = 2.0 * it * t;
+  c = t * t;
 
   if (pt) *pt = t;
-  return (T) (it * it * (double) ctrl_y1 + t * (2.0*it*(double)ctrl_y2 + t * (double) ctrl_y3));
+  return (T) (a * (double) ctrl_y1 + b * (double) ctrl_y2 + c * (double) ctrl_y3);
 }
 
 // Special case for x = y = [0,1]
@@ -103,9 +114,6 @@ T LICE_Bezier_GetY_Norm(T ctrl_x2, T ctrl_y2, T x)
     return x;
   }
 
-
-/*
-  // this causes ICC 11.0 to produce bad results on OSX/386
   double b = (double) (2 * ctrl_x2);
   double a = 1.0 - b;
   double c = (double) -x;
@@ -114,14 +122,6 @@ T LICE_Bezier_GetY_Norm(T ctrl_x2, T ctrl_y2, T x)
   b = 2.0 * (1.0 - t) * t;
   c = t * t;
   return (T) (b * (double) ctrl_y2 + c);
-
-  // the simplified math below works properly
-*/
-
-
-  const double t = (-ctrl_x2 + sqrt(ctrl_x2 * (ctrl_x2 - 2.0*x) + x)) / (1.0-2.0*ctrl_x2);
-
-  return (T) (((2.0 * (1.0-t)) * ctrl_y2 + t)*t);
 }
 
 // Finds the cardinal bezier control points surrounding x2.  

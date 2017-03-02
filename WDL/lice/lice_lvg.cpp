@@ -30,7 +30,7 @@ static int __boolval(const char *p, int defval)
 
 static LICE_pixel __colorval(const char *p, LICE_pixel def)
 {
-  const size_t lp = strlen(p);
+  int lp = strlen(p);
   if (lp == 3)
   {
     int r = chartohex(p[0]);
@@ -198,7 +198,7 @@ private:
 
 #define DECL_OPT(type, cfunc) \
   static type getoption_##type(LineParser *lp, int startidx, const char *name, type def) { \
-    const size_t namelen = strlen(name); \
+    int namelen = strlen(name); \
     for(;startidx<lp->getnumtokens();startidx++) { \
       const char *p=lp->gettoken_str(startidx); \
       if (!strnicmp(name,p,namelen) && p[namelen]=='=') return cfunc(p+namelen+1,def); \
@@ -247,7 +247,7 @@ void lvgImageCtx::processLvgLine(LineParser *lp, lvgRenderState *state, LICE_IBi
     {
       float x=(float)parsecoord(lp->gettoken_str(1),xscale,false);
       float y=(float)parsecoord(lp->gettoken_str(2),yscale,false);
-      float r=(float)(atof(lp->gettoken_str(3))*lice_min(xscale,yscale));
+      float r=(float)(atof(lp->gettoken_str(3))*min(xscale,yscale));
       if (getoption_bool(lp,1,"fill",false))
       {
         LICE_FillCircle(bm,x,y,r,state->m_color,state->m_alpha,state->m_blend,state->m_aa);
@@ -262,7 +262,7 @@ void lvgImageCtx::processLvgLine(LineParser *lp, lvgRenderState *state, LICE_IBi
     {
       float x=(float)parsecoord(lp->gettoken_str(1),xscale,false);
       float y=(float)parsecoord(lp->gettoken_str(2),yscale,false);
-      float r=(float)(atof(lp->gettoken_str(3))*lice_min(xscale,yscale));
+      float r=(float)(atof(lp->gettoken_str(3))*min(xscale,yscale));
       float a1=(float)(atof(lp->gettoken_str(4))*PI/180.0);
       float a2=(float)(atof(lp->gettoken_str(5))*PI/180.0);
       LICE_Arc(bm,x,y,r,a1,a2,state->m_color,state->m_alpha,state->m_blend,state->m_aa);
@@ -431,8 +431,8 @@ void lvgImageCtx::render(lvgRenderState *rstate, int wantw, int wanth)
   lvgRenderState rs;
   if (rstate) rs = *rstate;
  
-  double xscale = wantw / lice_max(m_base_w,1);
-  double yscale = wanth / lice_max(m_base_h,1);
+  double xscale = wantw / max(m_base_w,1);
+  double yscale = wanth / max(m_base_h,1);
   int x;
   bool comment_state=false;
   LineParser lp(comment_state);
@@ -595,10 +595,8 @@ void *LICE_LoadLVGFromContext(ProjectStateContext *ctx, const char *nameInfo, in
 void *LICE_LoadLVG(const char *filename)
 {
   FILE *fp=NULL;
-#if defined(_WIN32) && !defined(WDL_NO_SUPPORT_UTF8)
-  #ifdef WDL_SUPPORT_WIN9X
+#ifdef _WIN32
   if (GetVersion()<0x80000000)
-  #endif
   {
     WCHAR wf[2048];
     if (MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,filename,-1,wf,2048))

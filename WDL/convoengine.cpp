@@ -35,9 +35,6 @@
 //#define TIMING
 #include "timing.c"
 
-#define CONVOENGINE_SILENCE_THRESH 1.0e-12 // -240dB
-#define CONVOENGINE_IMPULSE_SILENCE_THRESH 1.0e-15 // -300dB
-
 static void WDL_CONVO_CplxMul2(WDL_FFT_COMPLEX *c, WDL_FFT_COMPLEX *a, WDL_CONVO_IMPULSEBUFCPLXf *b, int n)
 {
   WDL_FFT_REAL t1, t2, t3, t4, t5, t6, t7, t8;
@@ -108,7 +105,7 @@ static bool CompareQueueToBuf(WDL_FastQueue *q, const void *data, int len)
     WDL_FFT_REAL *b1=(WDL_FFT_REAL*)data;
     while (i--) 
     {
-      if (fabs(*a1-*b1)>CONVOENGINE_SILENCE_THRESH) return true;
+      if (fabs(*a1-*b1)>1.0e-7) return true;
       a1++;
       b1++;
     }
@@ -254,9 +251,9 @@ int WDL_ConvolutionEngine::SetImpulse(WDL_ImpulseBuffer *impulse, int fft_size, 
         imptmp[i*2]=0.0;
         imptmp[i*2+1]=0.0;
       }
-      if (mv>CONVOENGINE_IMPULSE_SILENCE_THRESH||mv2>CONVOENGINE_IMPULSE_SILENCE_THRESH)
+      if (mv>1.0e-14||mv2>1.0e-14)
       {
-        *zbuf++=mv>CONVOENGINE_IMPULSE_SILENCE_THRESH ? 2 : 1; // 1 means only second channel has content
+        *zbuf++=mv>1.0e-14 ? 2 : 1; // 1 means only second channel has content
         WDL_fft((WDL_FFT_COMPLEX*)impout,fft_size,0);
 
         if (smallerSizeMode)
@@ -529,9 +526,9 @@ int WDL_ConvolutionEngine::Avail(int want)
         for (i = 0; i < sz; i ++) // unpack samples
         {
           WDL_FFT_REAL f = optr[i*2]=denormal_filter_aggressive(optr[sz+i]);
-          if (!nonzflag && (f<-CONVOENGINE_SILENCE_THRESH || f>CONVOENGINE_SILENCE_THRESH)) nonzflag=true;
+          if (!nonzflag && (f<-1.0e-6 || f>1.0e-6)) nonzflag=true;
           f=optr[i*2+1]=denormal_filter_aggressive(workbuf2[i]);
-          if (!nonzflag && (f<-CONVOENGINE_SILENCE_THRESH || f>CONVOENGINE_SILENCE_THRESH)) nonzflag=true;
+          if (!nonzflag && (f<-1.0e-6 || f>1.0e-6)) nonzflag=true;
         }
       }
       else
@@ -554,7 +551,7 @@ int WDL_ConvolutionEngine::Avail(int want)
         {
           WDL_FFT_REAL f=optr[i*2]=denormal_filter_aggressive(optr[sz+i]);
           optr[i*2+1]=0.0;
-          if (!nonzflag && (f<-CONVOENGINE_SILENCE_THRESH || f>CONVOENGINE_SILENCE_THRESH)) nonzflag=true;
+          if (!nonzflag && (f<-1.0e-6 || f>1.0e-6)) nonzflag=true;
         }
       }
 
@@ -563,7 +560,7 @@ int WDL_ConvolutionEngine::Avail(int want)
       {
         int srchistpos = histpos-i;
         if (srchistpos < 0) srchistpos += nblocks;
-        if (!useSilentList || useSilentList[srchistpos]==2) mono_input_mode=false;
+        if (useSilentList[srchistpos]==2) mono_input_mode=false;
       }
 
       if (nonzflag||!useSilentList) memset(optr+sz*2,0,sz*2*sizeof(WDL_FFT_REAL));
@@ -1020,7 +1017,7 @@ int WDL_ImpulseBuffer::SetLength(int samples)
       if (impulses[x].GetSize()!=samples) // validate length!
       {
         // ERROR! FREE ALL!
-        for(x=0;x<WDL_CONVO_MAX_IMPULSE_NCH;x++) impulses[x].Resize(0);
+        for(x=0;x<m_nch;x++) impulses[x].Resize(0);
         return 0;
       }
     }
@@ -1039,21 +1036,22 @@ void WDL_ImpulseBuffer::SetNumChannels(int usench)
 
   if (usench > m_nch)
   {
-    const int old_nch = m_nch;
-    m_nch = usench;
-    const int len = SetLength(GetLength());
-
+    int len = GetLength();
     int x,ax=0;
-    if (len>0) for(x=old_nch;x<usench;x++) 
+    for(x=m_nch;x<usench;x++) 
     {
-      memcpy(impulses[x].Get(),impulses[ax].Get(),len*sizeof(WDL_FFT_REAL)); // duplicate channels
-      if (++ax>=old_nch) ax=0;
+      WDL_FFT_REAL *ptr=impulses[x].Resize(len,false);
+      if (ax<x) memcpy(ptr,impulses[ax].Get(),len*sizeof(WDL_FFT_REAL)); // duplicate channels
+      else memset(ptr,0,len*sizeof(WDL_FFT_REAL));
+
+      if (++ax==m_nch)ax=0;
     }
+    m_nch=usench;
   }
   else if (usench<m_nch)
   {
     m_nch=usench;
     int x;
-    for(x=usench;x<WDL_CONVO_MAX_IMPULSE_NCH;x++) impulses[x].Resize(0,false);
+    for(x=m_nch;x<WDL_CONVO_MAX_IMPULSE_NCH;x++) impulses[x].Resize(0,false);
   }
 }

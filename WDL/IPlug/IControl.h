@@ -22,7 +22,7 @@ public:
     : mPlug(pPlug), mRECT(pR), mTargetRECT(pR), mParamIdx(paramIdx), mValue(0.0), mDefaultValue(-1.0),
       mBlend(blendMethod), mDirty(true), mHide(false), mGrayed(false), mDisablePrompt(true), mDblAsSingleClick(false),
       mClampLo(0.0), mClampHi(1.0), mMOWhenGreyed(false), mTextEntryLength(DEFAULT_TEXT_ENTRY_LEN), 
-      mValDisplayControl(0), mNameDisplayControl(0), mTooltip("") {}
+      mValDisplayControl(0), mNameDisplayControl(0) {}
 
   virtual ~IControl() {}
 
@@ -30,7 +30,7 @@ public:
   virtual void OnMouseUp(int x, int y, IMouseMod* pMod) {}
   virtual void OnMouseDrag(int x, int y, int dX, int dY, IMouseMod* pMod) {}
   virtual void OnMouseDblClick(int x, int y, IMouseMod* pMod);
-  virtual void OnMouseWheel(int x, int y, IMouseMod* pMod, int d) {};
+  virtual void OnMouseWheel(int x, int y, IMouseMod* pMod, int d);
   virtual bool OnKeyDown(int x, int y, int key) { return false; }
 
   // For efficiency, mouseovers/mouseouts are ignored unless you call IGraphics::HandleMouseOver.
@@ -47,19 +47,14 @@ public:
   // Ask the IGraphics object to open an edit box so the user can enter a value for this control.
   void PromptUserInput();
   void PromptUserInput(IRECT* pTextRect);
-  
-  inline void SetTooltip(const char* tooltip) { mTooltip.Set(tooltip); }
-  inline const char* GetTooltip() const { return mTooltip.Get(); }
 
   int ParamIdx() { return mParamIdx; }
-  IParam *GetParam() { return mPlug->GetParam(mParamIdx); }
   virtual void SetValueFromPlug(double value);
-  virtual void SetValueFromUserInput(double value);
+  void SetValueFromUserInput(double value);
   double GetValue() { return mValue; }
 
   IText* GetText() { return &mText; }
   int GetTextEntryLength() { return mTextEntryLength; }
-  void SetTextEntryLength(int len) { mTextEntryLength = len;  }
   void SetText(IText* txt) { mText = *txt; }
   IRECT* GetRECT() { return &mRECT; }       // The draw area for this control.
   IRECT* GetTargetRECT() { return &mTargetRECT; } // The mouse target area (default = draw area).
@@ -119,9 +114,6 @@ public:
   void SetAllAuxParamsFromGUI();
   int NAuxParams() { return mAuxParams.GetSize(); }
   
-  IPlugBase* GetPlug() { return mPlug; }
-  IGraphics* GetGUI() { return mPlug->GetGUI(); }
-
 protected:
   int mTextEntryLength;
   IText mText;
@@ -135,7 +127,6 @@ protected:
   IChannelBlend mBlend;
   IControl* mValDisplayControl;
   IControl* mNameDisplayControl;
-  WDL_String mTooltip;
 };
 
 enum EDirection { kVertical, kHorizontal };
@@ -149,7 +140,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IColor mColor;
 };
 
@@ -184,37 +175,6 @@ public:
 
   void OnMouseDblClick(int x, int y, IMouseMod* pMod);
   void OnMouseDown(int x, int y, IMouseMod* pMod);
-};
-
-// Like ISwitchControl except it puts up a popup menu instead of cycling through states on click
-class ISwitchPopUpControl : public ISwitchControl
-{
-public:
-  ISwitchPopUpControl(IPlugBase* pPlug, int x, int y, int paramIdx, IBitmap* pBitmap,
-                 IChannelBlend::EBlendMethod blendMethod = IChannelBlend::kBlendNone)
-  : ISwitchControl(pPlug, x, y, paramIdx, pBitmap, blendMethod)
-  {
-    mDisablePrompt = false;
-  }
-  
-  ~ISwitchPopUpControl() {}
-  
-  void OnMouseDown(int x, int y, IMouseMod* pMod);
-};
-
-// A switch where each frame of the bitmap contains images for multiple button states. The Control's mRect will be divided into clickable areas.
-class ISwitchFramesControl : public ISwitchControl
-{
-public:
-  ISwitchFramesControl(IPlugBase* pPlug, int x, int y, int paramIdx, IBitmap* pBitmap, bool imagesAreHorizontal = false,
-                       IChannelBlend::EBlendMethod blendMethod = IChannelBlend::kBlendNone);
-  
-  ~ISwitchFramesControl() {}
-  
-  void OnMouseDown(int x, int y, IMouseMod* pMod);
-  
-protected:
-  WDL_TypedBuf<IRECT> mRECTs;
 };
 
 // On/off switch that has a target area only.
@@ -274,14 +234,13 @@ public:
 
   virtual void OnMouseDown(int x, int y, IMouseMod* pMod);
   virtual void OnMouseDrag(int x, int y, int dX, int dY, IMouseMod* pMod);
-  virtual void OnMouseWheel(int x, int y, IMouseMod* pMod, int d);
 
   virtual bool Draw(IGraphics* pGraphics);
   
   virtual bool IsHit(int x, int y);
 
 protected:
-  virtual void SnapToMouse(int x, int y);
+  void SnapToMouse(int x, int y);
   int mLen, mHandleHeadroom;
   IBitmap mBitmap;
   EDirection mDirection;
@@ -301,7 +260,6 @@ public:
 
   void SetGearing(double gearing) { mGearing = gearing; }
   virtual void OnMouseDrag(int x, int y, int dX, int dY, IMouseMod* pMod);
-  virtual void OnMouseWheel(int x, int y, IMouseMod* pMod, int d);
 
 protected:
   EDirection mDirection;
@@ -320,7 +278,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IColor mColor;
   float mMinAngle, mMaxAngle, mInnerRadius, mOuterRadius;
 };
@@ -338,7 +296,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IBitmap mBitmap;
   double mMinAngle, mMaxAngle;
   int mYOffset;
@@ -355,7 +313,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IBitmap mBitmap;
 };
 
@@ -374,7 +332,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IBitmap mBase, mMask, mTop;
   double mMinAngle, mMaxAngle;
 };
@@ -394,7 +352,7 @@ public:
 
   bool Draw(IGraphics* pGraphics);
 
-protected:
+private:
   IRECT mTargetArea;  // Keep this around to swap in & out.
 };
 
@@ -477,7 +435,7 @@ public:
   bool Draw(IGraphics* pGraphics);
   bool IsDirty();
 
-protected:
+private:
   IBitmap mBitmap;
   WDL_String mDir, mFile, mExtensions;
   EFileAction mFileAction;

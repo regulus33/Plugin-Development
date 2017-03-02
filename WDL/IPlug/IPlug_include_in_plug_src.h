@@ -31,6 +31,11 @@
     pGraphics->SetBundleID(BUNDLE_ID);
     return pGraphics;
   }
+#elif defined OS_IOS
+  IGraphics* MakeGraphics(IPlug* pPlug, int w, int h, int FPS = 0)
+  {
+    return 0;
+  }
 #else
   #error "No OS defined!"
 #endif
@@ -50,7 +55,7 @@
         pPlug->mAEffect.numPrograms = IPMAX(pPlug->mAEffect.numPrograms, 1);
         return &(pPlug->mAEffect);
       }
-      return 0;
+	    return 0;
     }
     EXPORT int main(int hostCallback)
     {
@@ -77,21 +82,23 @@ unsigned int GUID_DATA4 = PLUG_UNIQUE_ID;
   #endif
 #endif
 
+using namespace Steinberg::Vst;
+
 // called after library was loaded
 bool InitModule ()
 {
   #ifdef OS_WIN
-  extern void* moduleHandle;
-  gHInstance = (HINSTANCE) moduleHandle;
+	extern void* moduleHandle;
+	gHInstance = (HINSTANCE) moduleHandle;
   #endif
 
-  return true;
+	return true;
 }
 
 // called after library is unloaded
 bool DeinitModule ()
 {
-  return true;
+	return true;
 }
 
 IPlug* MakePlug()
@@ -103,18 +110,18 @@ IPlug* MakePlug()
   return new PLUG_CLASS_NAME(instanceInfo);
 }
 
-static Steinberg::FUnknown* createInstance (void*) {
-  return (Steinberg::Vst::IAudioProcessor*) MakePlug();
+static FUnknown* createInstance (void*) {
+  return (IAudioProcessor*) MakePlug();
 }
 
 // Company Information
 BEGIN_FACTORY_DEF (PLUG_MFR, MFR_URL, MFR_EMAIL)
 
 DEF_CLASS2 (INLINE_UID(GUID_DATA1, GUID_DATA2, GUID_DATA3, GUID_DATA4),
-            Steinberg::PClassInfo::kManyInstances,              // cardinality
+            PClassInfo::kManyInstances,                         // cardinality
             kVstAudioEffectClass,                               // the component category (don't change this)
             PLUG_NAME,                                          // plug-in name
-            Steinberg::Vst::kSimpleModeSupported,                          // kSimpleModeSupported because we can't split the gui and plugin
+            Vst::kSimpleModeSupported,                          // kSimpleModeSupported because we can't split the gui and plugin
             EFFECT_TYPE_VST3,                                   // Subcategory for this plug-in
             VST3_VER_STR,                                       // plug-in version
             kVstVersionString,                                  // the VST 3 SDK version (dont changed this, use always this define)
@@ -162,7 +169,8 @@ END_FACTORY
     return new PLUG_CLASS_NAME(instanceInfo);
   }
 #elif defined SA_API
-  IPlug* MakePlug(void* pMidiOutput, unsigned short* pMidiOutChan)
+  //IPlug* MakePlug(void* pMidiOutput, unsigned short* pMidiOutChan)
+  IPlug* MakePlug(void* pMidiOutput, unsigned short* pMidiOutChan, void* ioslink)
   {
     static WDL_Mutex sMutex;
     WDL_MutexLock lock(&sMutex);
@@ -175,6 +183,9 @@ END_FACTORY
       instanceInfo.mRTMidiOut = (RtMidiOut*) pMidiOutput;
       instanceInfo.mMidiOutChan = pMidiOutChan;
       instanceInfo.mOSXBundleID.Set(BUNDLE_ID);
+    #elif defined OS_IOS
+      instanceInfo.mIOSBundleID.Set(BUNDLE_ID);
+      instanceInfo.mIOSLink = (IOSLink*) ioslink;
     #endif
 
     return new PLUG_CLASS_NAME(instanceInfo);

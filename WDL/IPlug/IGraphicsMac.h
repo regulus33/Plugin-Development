@@ -7,7 +7,8 @@
 
 // carbon support uses quickdraw methods that have been removed in SDKs > 10.6
 #if __MAC_OS_X_VERSION_MAX_ALLOWED > 1060
-  #warning Carbon GUIs work best with the 10.6 sdk or lower
+  #define IPLUG_NO_CARBON_SUPPORT
+  #warning Carbon GUIs disabled when compiling against 10.7 or higher sdk
 #endif
 
 #include "IGraphics.h"
@@ -90,15 +91,10 @@ public:
   void ForceEndUserEdit();
 
   const char* GetGUIAPI();
-  
-  void UpdateTooltips();
 
   void HostPath(WDL_String* pPath);
   void PluginPath(WDL_String* pPath);
   void DesktopPath(WDL_String* pPath);
-//  void VST3PresetsPath(WDL_String* pPath, bool isSystem = true);
-  void AppSupportPath(WDL_String* pPath, bool isSystem = false);
-  void SandboxSafeAppSupportPath(WDL_String* pPath);
 
   void PromptForFile(WDL_String* pFilename, EFileAction action = kFileOpen, WDL_String* pDir = 0, char* extensions = "");   // extensions = "txt wav" for example.
   bool PromptForColor(IColor* pColor, char* prompt = "");
@@ -110,14 +106,14 @@ public:
 
   void* GetWindow();
 
+  int mIdleTicks;
+
   const char* GetBundleID()  { return mBundleID.Get(); }
   static int GetUserOSVersion();   // Returns a number like 0x1050 (10.5).
-  
-  bool GetTextFromClipboard(WDL_String* pStr);
 
 protected:
   virtual LICE_IBitmap* OSLoadBitmap(int ID, const char* name);
-  
+
 private:
 #ifndef IPLUG_NO_CARBON_SUPPORT
   IGraphicsCarbon* mGraphicsCarbon;
@@ -125,16 +121,7 @@ private:
   void* mGraphicsCocoa;   // Can't forward-declare IGraphicsCocoa because it's an obj-C object.
 
   WDL_String mBundleID;
-  
-  friend int GetMouseOver(IGraphicsMac* pGraphics);
-  
-#ifndef IPLUG_NO_CARBON_SUPPORT
-  friend class IGraphicsCarbon;
-#endif
-  
-  void *mColorSpace; // CGColorSpaceRef, created on demand and freed on destroy
-  WDL_HeapBuf mRetinaUpscaleBuf; // used for doubled-bitmap when drawing retina
-  
+
 public: //TODO: make this private
   void* mHostNSWindow;
 };

@@ -236,50 +236,6 @@ static unsigned int GLUE_POP_STACK_TO_FPSTACK[1] = { 0 }; // todo
 static const unsigned int GLUE_SET_P1_Z[] =  { 0x38600000 }; // li r3, 0
 static const unsigned int GLUE_SET_P1_NZ[] = { 0x38600001 }; // li r3, 1
 
-
-static void *GLUE_realAddress(void *fn, void *fn_e, int *size)
-{
-  // magic numbers: mr r0,r0 ; mr r1,r1 ; mr r2, r2
-  static const unsigned char sig[12] = { 0x7c, 0x00, 0x03, 0x78, 0x7c, 0x21, 0x0b, 0x78, 0x7c, 0x42, 0x13, 0x78 };
-  unsigned char *p = (unsigned char *)fn;
-
-  while (memcmp(p,sig,sizeof(sig))) p+=4;
-  p+=sizeof(sig);
-  fn = p;
-
-  while (memcmp(p,sig,sizeof(sig))) p+=4;
-  *size = p - (unsigned char *)fn;
-  return fn;
-}
-
-  #define GLUE_STORE_P1_TO_STACK_AT_OFFS_SIZE 4
-  static void GLUE_STORE_P1_TO_STACK_AT_OFFS(void *b, int offs)
-  {
-    // limited to 32k offset
-    *(unsigned int *)b = 0x90610000 + (offs&0xffff);
-  }
-
-  #define GLUE_MOVE_PX_STACKPTR_SIZE 4
-  static void GLUE_MOVE_PX_STACKPTR_GEN(void *b, int wv)
-  {
-    static const unsigned int tab[3] =
-    {
-      0x7c230b78, // mr r3, r1
-      0x7c2e0b78, // mr r14, r1
-      0x7c2f0b78, // mr r15, r1
-    };    
-    * (unsigned int *)b = tab[wv];
-  }
-
-  #define GLUE_MOVE_STACK_SIZE 4
-  static void GLUE_MOVE_STACK(void *b, int amt)
-  {
-    // this should be updated to allow for more than 32k moves, but no real need
-    ((unsigned int *)b)[0] = 0x38210000 + (amt&0xffff); // addi r1,r1, amt
-  }
-
-
-
 // end of ppc
 
 #endif

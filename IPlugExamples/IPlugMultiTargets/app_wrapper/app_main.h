@@ -27,10 +27,8 @@
 
   #define DAC_DS 0
   #define DAC_ASIO 1
-#elif defined OS_OSX
+#else if defined OS_OSX
   #include "swell.h"
-  SWELL_API_DEFINE(void, CenterWindow, (HWND hwnd))
-
   #define SLEEP( milliseconds ) usleep( (unsigned long) (milliseconds * 1000.0) )
 
   #define DEFAULT_INPUT_DEV "Built-in Input"

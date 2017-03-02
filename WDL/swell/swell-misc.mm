@@ -53,7 +53,7 @@ void SWELL_CFStringToCString(const void *str, char *buf, int buflen)
   NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES];
   if (!data)
   {
-    [s getCString:buf maxLength:buflen encoding:NSASCIIStringEncoding];
+    [s getCString:buf maxLength:buflen encoding:[NSString defaultCStringEncoding]];
     return;
   }
   int len = [data length];
@@ -110,7 +110,7 @@ DWORD SWELL_WaitForNSTask(void *p, DWORD msTO)
   return [a isRunning] ? WAIT_TIMEOUT : WAIT_OBJECT_0;
 }
 
-HANDLE SWELL_CreateProcessIO(const char *exe, int nparams, const char **params, bool redirectIO)
+HANDLE SWELL_CreateProcess(const char *exe, int nparams, const char **params)
 {
   NSString *ex = (NSString *)SWELL_CStringToCFString(exe);
   NSMutableArray *ar = [[NSMutableArray alloc] initWithCapacity:nparams];
@@ -123,28 +123,21 @@ HANDLE SWELL_CreateProcessIO(const char *exe, int nparams, const char **params, 
     [s release];
   }
 
-  NSTask *tsk = NULL;
-  
-  @try {
-    tsk = [[NSTask alloc] init];
-    [tsk setLaunchPath:ex];
-    [tsk setArguments:ar];
-    if (redirectIO)
-    {
-      [tsk setStandardInput:[NSPipe pipe]];
-      [tsk setStandardOutput:[NSPipe pipe]];
-      [tsk setStandardError:[NSPipe pipe]];
+  NSTask *tsk = [[NSTask alloc] init];
+
+  if (tsk)
+  {
+    @try {
+      [tsk setArguments:ar];
+      [tsk setLaunchPath:ex];
+      [tsk launch];
     }
-    [tsk launch];
-  }
-  @catch (NSException *exception) { 
-    [tsk release];
-    tsk=0;
-  }
-  @catch (id ex) {
+    @catch (NSException *exception) { 
+      [tsk release];
+      tsk=0;
+    }
   }
 
-  if (tsk) [tsk retain];
   [ex release];
   [ar release];
   if (!tsk) return NULL;
@@ -154,91 +147,6 @@ HANDLE SWELL_CreateProcessIO(const char *exe, int nparams, const char **params, 
   buf->hdr.count=1;
   buf->task = tsk;
   return buf;
-}
-
-HANDLE SWELL_CreateProcess(const char *exe, int nparams, const char **params)
-{
-  return SWELL_CreateProcessIO(exe,nparams,params,false);
-}
-
-
-int SWELL_GetProcessExitCode(HANDLE hand)
-{
-  int rv=0;
-  SWELL_InternalObjectHeader_NSTask *hdr=(SWELL_InternalObjectHeader_NSTask*)hand;
-  if (!hdr || hdr->hdr.type != INTERNAL_OBJECT_NSTASK || !hdr->task) return -1;
-  @try {
-    if ([(NSTask *)hdr->task isRunning]) rv=-3;
-    else rv = [(NSTask *)hdr->task terminationStatus];
-  }
-  @catch (id ex) { 
-    rv=-2;
-  }
-  return rv;
-}
-
-int SWELL_TerminateProcess(HANDLE hand)
-{
-  int rv=0;
-  SWELL_InternalObjectHeader_NSTask *hdr=(SWELL_InternalObjectHeader_NSTask*)hand;
-  if (!hdr || hdr->hdr.type != INTERNAL_OBJECT_NSTASK || !hdr->task) return -1;
-  @try
-  {
-    [(NSTask *)hdr->task terminate];
-  }
-  @catch (id ex) {
-    rv=-2;
-  }
-  return rv;
-}
-int SWELL_ReadWriteProcessIO(HANDLE hand, int w/*stdin,stdout,stderr*/, char *buf, int bufsz)
-{
-  SWELL_InternalObjectHeader_NSTask *hdr=(SWELL_InternalObjectHeader_NSTask*)hand;
-  if (!hdr || hdr->hdr.type != INTERNAL_OBJECT_NSTASK || !hdr->task) return 0;
-  NSTask *tsk = (NSTask*)hdr->task;
-  NSPipe *pipe = NULL;
-  switch (w)
-  {
-    case 0: pipe = [tsk standardInput]; break;
-    case 1: pipe = [tsk standardOutput]; break;
-    case 2: pipe = [tsk standardError]; break;
-  }
-  if (!pipe || ![pipe isKindOfClass:[NSPipe class]]) return 0;
-
-  NSFileHandle *fh = w!=0 ? [pipe fileHandleForReading] : [pipe fileHandleForWriting];
-  if (!fh) return 0;
-  if (w==0)
-  {
-    if (bufsz>0)
-    {
-      NSData *d = [NSData dataWithBytes:buf length:bufsz];
-      @try
-      {
-        if (d) [fh writeData:d];
-        else bufsz=0;
-      }
-      @catch (id ex) { bufsz=0; }
-
-      return bufsz;
-    }
-  }
-  else 
-  {
-    NSData *d = NULL;
-    @try
-    {
-      d = [fh readDataOfLength:(bufsz < 1 ? 32768 : bufsz)];
-    }
-    @catch (id ex) { }
-
-    if (!d || bufsz < 1) return d ? [d length] : 0;
-    int l = [d length];
-    if (l > bufsz) l = bufsz;
-    [d getBytes:buf length:l];
-    return l;
-  }
-
-  return 0;
 }
 
 
@@ -291,19 +199,6 @@ void SWELL_QuitAutoRelease(void *p)
 {
   if (p)
     [(NSAutoreleasePool*)p release];
-}
-
-void SWELL_RunEvents()
-{
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-  int x=100;
-  while (x-- > 0)
-  {
-    NSEvent *event = [NSApp nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate dateWithTimeIntervalSinceNow:0.001] inMode:NSDefaultRunLoopMode dequeue:YES];
-    if (!event) break;
-    [NSApp sendEvent:event];
-  }
-  [pool release];
 }
 
 // timer stuff
@@ -373,7 +268,7 @@ UINT_PTR SetTimer(HWND hwnd, UINT_PTR timerid, UINT rate, TIMERPROC tProc)
     if (!hwnd) timerid = rec->timerid = (UINT_PTR)rec;
     
     SWELL_TimerFuncTarget *t = [[SWELL_TimerFuncTarget alloc] initWithId:timerid hwnd:hwnd callback:tProc];
-    rec->timer = [NSTimer scheduledTimerWithTimeInterval:(wdl_max(rate,1)*0.001) target:t selector:@selector(SWELL_Timer:)
+    rec->timer = [NSTimer scheduledTimerWithTimeInterval:(max(rate,1)*0.001) target:t selector:@selector(SWELL_Timer:) 
                                                 userInfo:t repeats:YES];
     [t release];
     
@@ -381,7 +276,7 @@ UINT_PTR SetTimer(HWND hwnd, UINT_PTR timerid, UINT rate, TIMERPROC tProc)
   else
   {
     SWELL_DataHold *t=[[SWELL_DataHold alloc] initWithVal:(void *)timerid];
-    rec->timer = [NSTimer scheduledTimerWithTimeInterval:(wdl_max(rate,1)*0.001) target:(id)hwnd selector:@selector(SWELL_Timer:)
+    rec->timer = [NSTimer scheduledTimerWithTimeInterval:(max(rate,1)*0.001) target:(id)hwnd selector:@selector(SWELL_Timer:) 
                                                 userInfo:t repeats:YES];
     
     [t release];
@@ -516,16 +411,11 @@ void SWELL_MessageQueue_Flush()
   if (!m_pmq_mutex) return;
   
   m_pmq_mutex->Enter();
-  int max_amt = m_pmq_size;
-  PMQ_rec *p=m_pmq;
-  if (p)
-  {
-    m_pmq = p->next;
-    if (m_pmq_tail == p) m_pmq_tail=NULL;
-    m_pmq_size--;
-  }
+  PMQ_rec *p=m_pmq, *startofchain=m_pmq;
+  m_pmq=m_pmq_tail=0;
   m_pmq_mutex->Leave();
   
+  int cnt=0;
   // process out queue
   while (p)
   {
@@ -535,24 +425,19 @@ void SWELL_MessageQueue_Flush()
       else SetTimer(p->hwnd,p->wParam,p->msg,(TIMERPROC)p->lParam);
     }
     else
-    {
       SendMessage(p->hwnd,p->msg,p->wParam,p->lParam); 
-    }
     
-    m_pmq_mutex->Enter();
-    // move this message to empty list
-    p->next=m_pmq_empty;
-    m_pmq_empty = p;
-
-    // get next queued message (if within limits)
-    p = (--max_amt > 0) ? m_pmq : NULL;
-    if (p)
+    cnt ++;
+    if (!p->next) // add the chain back to empties
     {
-      m_pmq = p->next;
-      if (m_pmq_tail == p) m_pmq_tail=NULL;
-      m_pmq_size--;
+      m_pmq_mutex->Enter();
+      m_pmq_size-=cnt;
+      p->next=m_pmq_empty;
+      m_pmq_empty=startofchain;
+      m_pmq_mutex->Leave();
+      break;
     }
-    m_pmq_mutex->Leave();
+    p=p->next;
   }
 }
 #endif
@@ -676,100 +561,5 @@ void SWELL_EnableRightClickEmulate(BOOL enable)
   s_rightclickemulate=enable;
 }
 
-int g_swell_terminating;
-void SWELL_PostQuitMessage(void *sender)
-{
-  g_swell_terminating=true;
-
-  [NSApp terminate:(id)sender];
-}
-
-
-#ifndef MAC_OS_X_VERSION_10_9
-typedef uint64_t NSActivityOptions;
-enum
-{
-  NSActivityIdleDisplaySleepDisabled = (1ULL << 40),
-  NSActivityIdleSystemSleepDisabled = (1ULL << 20),
-  NSActivitySuddenTerminationDisabled = (1ULL << 14),
-  NSActivityAutomaticTerminationDisabled = (1ULL << 15),
-  NSActivityUserInitiated = (0x00FFFFFFULL | NSActivityIdleSystemSleepDisabled),
-  NSActivityUserInitiatedAllowingIdleSystemSleep = (NSActivityUserInitiated & ~NSActivityIdleSystemSleepDisabled),
-  NSActivityBackground = 0x000000FFULL,
-  NSActivityLatencyCritical = 0xFF00000000ULL,
-};
-
-
-@interface NSProcessInfo (reaperhostadditions)
-- (id<NSObject>)beginActivityWithOptions:(NSActivityOptions)options reason:(NSString *)reason;
-- (void)endActivity:(id<NSObject>)activity;
-
-@end
-
-#endif
-
-void SWELL_DisableAppNap(int disable)
-{
-  if (!g_swell_terminating && floor(NSFoundationVersionNumber) > 945.00) // 10.9+
-  {
-    static int cnt;
-    static id obj;
-
-    cnt += disable;
-
-    @try
-    {
-      if (cnt > 0)
-      {
-        if (!obj)
-        {
-          const NSActivityOptions  v = NSActivityLatencyCritical |  NSActivityIdleSystemSleepDisabled;
-
-          // beginActivityWithOptions returns an autoreleased object
-          obj = [[NSProcessInfo processInfo] beginActivityWithOptions:v reason:@"SWELL_DisableAppNap"];
-          if (obj) [obj retain];
-        }
-      }
-      else
-      {
-        id a = obj;
-        if (a)
-        {
-          // in case we crash somehow, dont' want obj sticking around pointing to a stale object
-          obj = NULL;
-          [[NSProcessInfo processInfo] endActivity:a];
-          [a release]; // apparently releasing this is enough, without the endActivity call, but the docs are quite vague
-        }
-      }
-    }
-    @catch (NSException *exception) {
-    }
-    @catch (id ex) {
-    }
-  }
-}
-
-
-int SWELL_GetOSXVersion()
-{
-  static SInt32 v;
-  if (!v)
-  {
-    if (NSAppKitVersionNumber >= 1266.0) 
-    {
-      if (NSAppKitVersionNumber >= 1404.0)
-        v = 0x10b0;
-      else
-        v = 0x10a0; // 10.10+ Gestalt(gsv) return 0x109x, so we bump this to 0x10a0
-    }
-    else 
-    {
-      SInt32 a = 0x1040;
-      Gestalt(gestaltSystemVersion,&a);
-      v=a;
-    }
-  }
-  return v;
-}
 
 #endif

@@ -13,13 +13,8 @@ typedef unsigned long long WDL_UINT64;
 
 #endif
 
-#ifdef _MSC_VER
-  #define WDL_UINT64_CONST(x) (x##ui64)
-  #define WDL_INT64_CONST(x) (x##i64)
-#else
-  #define WDL_UINT64_CONST(x) (x##ULL)
-  #define WDL_INT64_CONST(x) (x##LL)
-#endif
+#define WDL_UINT64_CONST(x) ((WDL_UINT64)(x))
+#define WDL_INT64_CONST(x) ((WDL_INT64)(x))
 
 
 #if !defined(_MSC_VER) ||  _MSC_VER > 1200
@@ -71,70 +66,12 @@ typedef bool WDL_bool;
   #define WDL_FIXALIGN  __attribute__ ((aligned (8)))
 // usage: void func(int a, const char *fmt, ...) WDL_VARARG_WARN(printf,2,3); // note: if member function, this pointer is counted as well, so as member function that would be 3,4
   #define WDL_VARARG_WARN(x,n,s) __attribute__ ((format (x,n,s)))
-  #define WDL_STATICFUNC_UNUSED __attribute__((unused))
 
 #else
   #define WDL_FIXALIGN 
   #define WDL_VARARG_WARN(x,n,s)
-  #define WDL_STATICFUNC_UNUSED
-#endif
-
-#ifndef WDL_WANT_NEW_EXCEPTIONS
-#if defined(__cplusplus)
-#include <new>
-#define WDL_NEW (std::nothrow)
-#endif
-#else
-#define WDL_NEW
 #endif
 
 
-#if !defined(max) && defined(WDL_DEFINE_MINMAX)
-#define max(x,y) ((x)<(y)?(y):(x))
-#define min(x,y) ((x)<(y)?(x):(y))
-#endif
-
-#ifndef wdl_max
-#define wdl_max(x,y) ((x)<(y)?(y):(x))
-#define wdl_min(x,y) ((x)<(y)?(x):(y))
-#endif
-
-#ifndef _WIN32
-  #ifndef strnicmp 
-    #define strnicmp(x,y,z) strncasecmp(x,y,z)
-  #endif
-  #ifndef stricmp 
-    #define stricmp(x,y) strcasecmp(x,y)
-  #endif
-#endif
-
-#ifdef WDL_BACKSLASHES_ARE_ORDINARY
-#define WDL_IS_DIRCHAR(x) ((x) == '/')
-#else
-// for multi-platform applications it seems better to treat backslashes as directory separators even if it
-// isn't supported by the underying system (for resolving filenames, etc)
-  #ifdef _WIN32
-    #define WDL_IS_DIRCHAR(x) ((x) == '\\' || (x) == '/')
-  #else
-    #define WDL_IS_DIRCHAR(x) ((x) == '/' || (x) == '\\')
-  #endif
-#endif
-
-#if defined(_WIN32) && !defined(WDL_BACKSLASHES_ARE_ORDINARY)
-#define WDL_DIRCHAR '\\'
-#define WDL_DIRCHAR_STR "\\"
-#else
-#define WDL_DIRCHAR '/'
-#define WDL_DIRCHAR_STR "/"
-#endif
-
-
-#if defined(__GNUC__) || defined(__INTEL_COMPILER)
-  #define WDL_likely(x) __builtin_expect(!!(x),1)
-  #define WDL_unlikely(x) __builtin_expect(!!(x),0)
-#else
-  #define WDL_likely(x) (!!(x))
-  #define WDL_unlikely(x) (!!(x))
-#endif
 
 #endif

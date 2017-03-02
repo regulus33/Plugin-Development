@@ -85,7 +85,7 @@ BOOL GetFileTime(int filedes, FILETIME *lpCreationTime, FILETIME *lpLastAccessTi
   return 1;
 }
 
-BOOL SWELL_PtInRect(const RECT *r, POINT p)
+BOOL SWELL_PtInRect(RECT *r, POINT p)
 {
   if (!r) return FALSE;
   int tp=r->top;
@@ -107,7 +107,7 @@ int MulDiv(int a, int b, int c)
 
 unsigned int  _controlfp(unsigned int flag, unsigned int mask)
 {
-#if !defined(__ppc__) && !defined(__LP64__) && !defined(__arm__)
+#if !defined(__ppc__) && !defined(__LP64__)
   unsigned short ret;
   mask &= _MCW_RC; // don't let the caller set anything other than round control for now
   __asm__ __volatile__("fnstcw %0\n\t":"=m"(ret));
@@ -219,9 +219,7 @@ DWORD WaitForAnySocketObject(int numObjs, HANDLE *objs, DWORD msTO) // only supp
   if (max_s>0)
   {
 again:
-    struct timeval tv;
-    tv.tv_sec = msTO/1000;
-    tv.tv_usec = (msTO%1000)*1000;
+    struct timeval tv={msTO/1000,(msTO%1000)*1000};
     if (select(max_s+1,&s,NULL,NULL,msTO==INFINITE?NULL:&tv)>0) for (x = 0; x < numObjs; x ++)
     {
       SWELL_InternalObjectHeader_SocketEvent *se = (SWELL_InternalObjectHeader_SocketEvent *)objs[x];
@@ -288,9 +286,7 @@ DWORD WaitForSingleObject(HANDLE hand, DWORD msTO)
           FD_ZERO(&s);
 again:
           FD_SET(se->socket[0],&s);
-          struct timeval tv;
-          tv.tv_sec = msTO/1000;
-          tv.tv_usec = (msTO%1000)*1000;
+          struct timeval tv={msTO/1000,(msTO%1000)*1000};
           if (select(se->socket[0]+1,&s,NULL,NULL,msTO==INFINITE?NULL:&tv)>0 && FD_ISSET(se->socket[0],&s)) 
           {
             if (se->hdr.type == INTERNAL_OBJECT_SOCKETEVENT && se->autoReset)
@@ -320,9 +316,7 @@ again:
         else
         {
           // timed wait
-          struct timespec ts;
-          ts.tv_sec = msTO/1000;
-          ts.tv_nsec = (msTO%1000)*1000000;
+          struct timespec ts={msTO/1000, (msTO%1000)*1000000};      
           while (!evt->isSignal) 
           {
 #ifdef SWELL_TARGET_OSX
@@ -596,7 +590,7 @@ BOOL WinSetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom)
 }
 
 
-int WinIntersectRect(RECT *out, const RECT *in1, const RECT *in2)
+int WinIntersectRect(RECT *out, RECT *in1, RECT *in2)
 {
   memset(out,0,sizeof(RECT));
   if (in1->right <= in1->left) return false;
@@ -605,19 +599,19 @@ int WinIntersectRect(RECT *out, const RECT *in1, const RECT *in2)
   if (in2->bottom <= in2->top) return false;
   
   // left is maximum of minimum of right edges and max of left edges
-  out->left = wdl_max(in1->left,in2->left);
-  out->right = wdl_min(in1->right,in2->right);
-  out->top=wdl_max(in1->top,in2->top);
-  out->bottom = wdl_min(in1->bottom,in2->bottom);
+  out->left = max(in1->left,in2->left);
+  out->right = min(in1->right,in2->right);
+  out->top=max(in1->top,in2->top);
+  out->bottom = min(in1->bottom,in2->bottom);
   
   return out->right>out->left && out->bottom>out->top;
 }
-void WinUnionRect(RECT *out, const RECT *in1, const RECT *in2)
+void WinUnionRect(RECT *out, RECT *in1, RECT *in2)
 {
-  out->left = wdl_min(in1->left,in2->left);
-  out->top = wdl_min(in1->top,in2->top);
-  out->right=wdl_max(in1->right,in2->right);
-  out->bottom=wdl_max(in1->bottom,in2->bottom);
+  out->left = min(in1->left,in2->left);
+  out->top = min(in1->top,in2->top);
+  out->right=max(in1->right,in2->right);
+  out->bottom=max(in1->bottom,in2->bottom);
 }
 
 
@@ -719,16 +713,30 @@ HINSTANCE LoadLibraryGlobals(const char *fn, bool symbolsAsGlobals)
     
     if (bundleinst)
     {
-      if (!CFBundleLoadExecutable((CFBundleRef)bundleinst))
+      CFURLRef executableURL = CFBundleCopyExecutableURL((CFBundleRef)bundleinst);
+      char path[PATH_MAX];
+      path[0]=0;
+      if (executableURL) 
       {
-        CFRelease((CFBundleRef)bundleinst);
-        bundleinst=NULL;
+        if (!CFURLGetFileSystemRepresentation(executableURL, true, (UInt8*)path, sizeof(path))) path[0]=0;
+        CFRelease(executableURL);
+      }        
+      
+      if (path[0]) 
+      {
+
+        inst=dlopen(path,RTLD_NOW|(symbolsAsGlobals?RTLD_GLOBAL:RTLD_LOCAL));
+        if (!inst)
+        {
+          CFRelease(bundleinst);
+          return 0;
+        }
       }
     }      
   }
 #endif
 
-  if (!bundleinst)
+  if (!inst && !bundleinst)
   {
     inst=dlopen(fn,RTLD_NOW|(symbolsAsGlobals?RTLD_GLOBAL:RTLD_LOCAL));
     if (!inst) return 0;
@@ -739,10 +747,12 @@ HINSTANCE LoadLibraryGlobals(const char *fn, bool symbolsAsGlobals)
   SWELL_HINSTANCE *rec = s_loadedLibs.Get(bundleinst ? bundleinst : inst);
   if (!rec) 
   { 
-    rec = (SWELL_HINSTANCE *)calloc(sizeof(SWELL_HINSTANCE),1);
+    rec = (SWELL_HINSTANCE *)malloc(sizeof(SWELL_HINSTANCE));
     rec->instptr = inst;
     rec->bundleinstptr =  bundleinst;
     rec->refcnt = 1;
+    rec->SWELL_dllMain = NULL;
+    rec->dllMain = NULL;
     s_loadedLibs.Insert(bundleinst ? bundleinst : inst,rec);
   
     int (*SWELL_dllMain)(HINSTANCE, DWORD, LPVOID) = 0;
@@ -782,20 +792,18 @@ void *GetProcAddress(HINSTANCE hInst, const char *procName)
 
   SWELL_HINSTANCE *rec=(SWELL_HINSTANCE*)hInst;
 
-  void *ret = NULL;
 #ifdef __APPLE__
   if (rec->bundleinstptr)
   {
     CFStringRef str=(CFStringRef)SWELL_CStringToCFString(procName); 
-    ret = (void *)CFBundleGetFunctionPointerForName((CFBundleRef)rec->bundleinstptr, str);
-    if (ret) rec->lastSymbolRequested=ret;
+    void *ret = (void *)CFBundleGetFunctionPointerForName((CFBundleRef)rec->bundleinstptr, str);
     CFRelease(str);
     return ret;
   }
 #endif
-  if (rec->instptr)  ret=(void *)dlsym(rec->instptr, procName);
-  if (ret) rec->lastSymbolRequested=ret;
-  return ret;
+  if (rec->instptr)  return (void *)dlsym(rec->instptr, procName);
+  
+  return 0;
 }
 
 BOOL FreeLibrary(HINSTANCE hInst)
@@ -816,13 +824,11 @@ BOOL FreeLibrary(HINSTANCE hInst)
       rec->SWELL_dllMain(rec,DLL_PROCESS_DETACH,NULL);
       if (rec->dllMain) rec->dllMain(rec,DLL_PROCESS_DETACH,NULL);
     }
+
   }
 
 #ifdef __APPLE__
-  if (rec->bundleinstptr)
-  {
-    CFRelease((CFBundleRef)rec->bundleinstptr);
-  }
+  if (rec->bundleinstptr) CFRelease((CFBundleRef)rec->bundleinstptr); 
 #endif
   if (rec->instptr) dlclose(rec->instptr); 
   
@@ -830,24 +836,16 @@ BOOL FreeLibrary(HINSTANCE hInst)
   return TRUE;
 }
 
-void* SWELL_GetBundle(HINSTANCE hInst)
-{
-  SWELL_HINSTANCE* rec=(SWELL_HINSTANCE*)hInst;
-  if (rec) return rec->bundleinstptr;
-  return NULL;
-}
-
 DWORD GetModuleFileName(HINSTANCE hInst, char *fn, DWORD nSize)
 {
   *fn=0;
 
-  void *instptr = NULL, *bundleinstptr=NULL, *lastSymbolRequested=NULL;
+  void *instptr = NULL, *bundleinstptr=NULL;
   if (hInst)
   {
     SWELL_HINSTANCE *p = (SWELL_HINSTANCE*)hInst;
     instptr = p->instptr;
     bundleinstptr = p->bundleinstptr;
-    lastSymbolRequested=p->lastSymbolRequested;
   }
 #ifdef __APPLE__
   if (!instptr || bundleinstptr)
@@ -878,14 +876,18 @@ DWORD GetModuleFileName(HINSTANCE hInst, char *fn, DWORD nSize)
   }
 #endif
 
-  if (instptr && lastSymbolRequested)
+  if (instptr)
   {
-    Dl_info inf={0,};
-    dladdr(lastSymbolRequested,&inf);
-    if (inf.dli_fname)
+    void *p = GetProcAddress(hInst,"SWELL_dllMain");
+    if (p)
     {
-      lstrcpyn(fn,inf.dli_fname,nSize);
-      return strlen(fn);
+      Dl_info inf={0,};
+      dladdr(p,&inf);
+      if (inf.dli_fname)
+      {
+        lstrcpyn(fn,inf.dli_fname,nSize);
+        return strlen(fn);
+      }
     }
   }
   return 0;
@@ -906,31 +908,5 @@ void SWELL_GenerateGUID(void *g)
 
 #endif
 
-
-void GetTempPath(int bufsz, char *buf)
-{
-  if (bufsz<2)
-  {
-    if (bufsz>0) *buf=0;
-    return;
-  }
-
-#ifdef __APPLE__
-  const char *p = getenv("TMPDIR");
-#else
-  const char *p = getenv("TEMP");
-#endif
-  if (!p || !*p) p="/tmp/";
-  lstrcpyn(buf, p, bufsz);
-
-  size_t len = strlen(buf);
-  if (!len || buf[len-1] != '/')
-  {
-    if (len > bufsz-2) len = bufsz-2;
-
-    buf[len] = '/';
-    buf[len+1]=0;
-  }
-}
 
 #endif

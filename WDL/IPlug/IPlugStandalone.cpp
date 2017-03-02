@@ -1,6 +1,8 @@
 #include "IPlugStandalone.h"
-#include "IGraphics.h"
-extern HWND gHWND;
+#ifndef OS_IOS
+  #include "IGraphics.h"
+  extern HWND gHWND;
+#endif
 
 IPlugStandalone::IPlugStandalone(IPlugInstanceInfo instanceInfo,
                                  int nParams,
@@ -31,7 +33,8 @@ IPlugStandalone::IPlugStandalone(IPlugInstanceInfo instanceInfo,
               plugDoesChunks,
               plugIsInst,
               kAPISA)
-  , mMidiOutChan(0)
+
+  , mDoesMidi(plugDoesMidi)
 {
   Trace(TRACELOC, "%s%s", effectName, channelIOStr);
 
@@ -41,12 +44,17 @@ IPlugStandalone::IPlugStandalone(IPlugInstanceInfo instanceInfo,
   SetBlockSize(DEFAULT_BLOCK_SIZE);
   SetHost("standalone", vendorVersion);
 
+  #ifdef OS_IOS
+  mIOSLink = instanceInfo.mIOSLink;
+  #else
   mMidiOutChan = instanceInfo.mMidiOutChan;
   mMidiOut = instanceInfo.mRTMidiOut;
+  #endif
 }
 
 void IPlugStandalone::ResizeGraphics(int w, int h)
 {
+  #ifndef OS_IOS
   IGraphics* pGraphics = GetGUI();
   if (pGraphics)
   {
@@ -58,16 +66,20 @@ void IPlugStandalone::ResizeGraphics(int w, int h)
     #endif
     OnWindowResize();
   }
+  #endif
 }
 
 bool IPlugStandalone::SendMidiMsg(IMidiMsg* pMsg)
 {
-  if (DoesMIDI())
+  #ifdef OS_IOS
+  mIOSLink->SendMidiMsg(pMsg);
+  #else
+  if (mMidiOut)
   {
     IMidiMsg newMsg = *pMsg;
 
     // if the midi channel out filter is set, reassign the status byte appropriately
-    if (mMidiOutChan != 0)
+    if (!*mMidiOutChan == 0)
     {
       newMsg.mStatus = (*mMidiOutChan)-1 | ((unsigned int) newMsg.StatusMsg() << 4) ;
     }
@@ -80,29 +92,20 @@ bool IPlugStandalone::SendMidiMsg(IMidiMsg* pMsg)
     mMidiOut->sendMessage( &message );
     return true;
   }
-
+  #endif
   return false;
 }
 
-bool IPlugStandalone::SendSysEx(ISysEx* pSysEx)
+#ifdef OS_IOS
+void IPlugStandalone::LockMutexAndProcessSingleReplacing(float** inputs, float** outputs, int nFrames)
 {
-  if (mMidiOut)
-  {  
-    std::vector<unsigned char> message;
-    
-    for (int i = 0; i < pSysEx->mSize; i++) {
-      message.push_back(pSysEx->mData[i]);
-    }
-    
-    mMidiOut->sendMessage( &message );
-    return true;
-  }
-  
-  return false;
+  IMutexLock lock(this);
+  ProcessSingleReplacing(inputs, outputs, nFrames);
 }
-
+#else
 void IPlugStandalone::LockMutexAndProcessDoubleReplacing(double** inputs, double** outputs, int nFrames)
 {
   IMutexLock lock(this);
   ProcessDoubleReplacing(inputs, outputs, nFrames);
 }
+#endif

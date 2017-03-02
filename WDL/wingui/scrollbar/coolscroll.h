@@ -61,7 +61,7 @@ HRESULT WINAPI UninitializeCoolSB(HWND hwnd); // call in WM_DESTROY -- not stric
 BOOL WINAPI CoolSB_SetMinThumbSize(HWND hwnd, UINT wBar, UINT size);
 BOOL WINAPI CoolSB_IsThumbTracking(HWND hwnd);
 BOOL WINAPI CoolSB_IsCoolScrollEnabled(HWND hwnd);
-void CoolSB_SetVScrollPad(HWND hwnd, UINT topamt, UINT botamt, void *(*getDeadAreaBitmap)(int which, HWND hwnd, RECT *, int defcol));
+
 //
 BOOL WINAPI CoolSB_GetScrollInfo(HWND hwnd, int fnBar, LPSCROLLINFO lpsi);
 int	 WINAPI CoolSB_GetScrollPos(HWND hwnd, int nBar);
@@ -74,7 +74,6 @@ int  WINAPI CoolSB_SetScrollRange	(HWND hwnd, int nBar, int nMinPos, int nMaxPos
 BOOL WINAPI CoolSB_ShowScrollBar	(HWND hwnd, int wBar, BOOL fShow);
 
 BOOL WINAPI CoolSB_SetResizingThumb(HWND hwnd, BOOL active);
-BOOL WINAPI CoolSB_SetThemeIndex(HWND hwnd, int idx);
 void CoolSB_SetScale(float scale); // sets scale to use for scrollbars (does not refresh, though -- set this at startup/etc)
 void CoolSB_OnColorThemeChange(); // refreshes all
 

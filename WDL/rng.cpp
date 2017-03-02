@@ -33,6 +33,9 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+#ifndef min
+#define min(x,y) ((x)<(y)?(x):(y))
+#endif
 #endif
 
 
@@ -83,7 +86,7 @@ void WDL_RNG_bytes(void *buf, int buflen)
     rngcycle();
 
     tmp.result(tb);
-    const int l=buflen < WDL_SHA1SIZE ? buflen : WDL_SHA1SIZE;
+    int l=min(buflen,WDL_SHA1SIZE);
     memcpy(b,tb,l);
     buflen-=l;
     b+=l;

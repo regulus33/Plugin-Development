@@ -41,6 +41,8 @@ IPlugVST::IPlugVST(IPlugInstanceInfo instanceInfo,
               plugDoesChunks,
               plugIsInst,
               kAPIVST2)
+
+  , mDoesMidi(plugDoesMidi)
   , mHostCallback(instanceInfo.mVSTHostCallback)
   , mHostSpecificInitDone(false)
 {
@@ -310,8 +312,6 @@ void IPlugVST::HostSpecificInit()
       case kHostSAWStudio:
         LimitToStereoIO();
         break;
-      default:
-        break;
     }
 
     // This won't always solve a picky host problem -- for example Forte
@@ -576,11 +576,10 @@ VstIntPtr VSTCALLBACK IPlugVST::VSTDispatcher(AEffect *pEffect, VstInt32 opCode,
               //  msg.LogMsg();
               //#endif
             }
-            else if (pEvent->type == kVstSysExType) 
-            {
-              VstMidiSysexEvent* pSE = (VstMidiSysexEvent*) pEvent;
-              ISysEx sysex(pSE->deltaFrames, (const BYTE*)pSE->sysexDump, pSE->dumpBytes);
-              _this->ProcessSysEx(&sysex);
+            else if (pEvent->type == kVstSysExType) {
+                VstMidiSysexEvent* pSE = (VstMidiSysexEvent*) pEvent;
+                ISysEx sysex(pSE->deltaFrames, (const BYTE*)pSE->sysexDump, pSE->dumpBytes);
+                _this->ProcessSysEx(&sysex);
             }
           }
         }
@@ -709,10 +708,6 @@ VstIntPtr VSTCALLBACK IPlugVST::VSTDispatcher(AEffect *pEffect, VstInt32 opCode,
       }
       return 0;
     }
-    case effGetVendorVersion:
-    {
-      return _this->GetEffectVersion(true);
-    }
     case effCanDo:
     {
       if (ptr)
@@ -722,7 +717,7 @@ VstIntPtr VSTCALLBACK IPlugVST::VSTDispatcher(AEffect *pEffect, VstInt32 opCode,
         {
           return 1;
         }
-        if (_this->DoesMIDI())
+        if (_this->mDoesMidi)
         {
           if (!strcmp((char*) ptr, "sendVstEvents") ||
               !strcmp((char*) ptr, "sendVstMidiEvent") ||
@@ -746,10 +741,6 @@ VstIntPtr VSTCALLBACK IPlugVST::VSTDispatcher(AEffect *pEffect, VstInt32 opCode,
         }
       }
       return 0;
-    }
-    case effGetTailSize:
-    {
-      return _this->GetTailSize();
     }
     case effVendorSpecific:
     {
@@ -846,7 +837,7 @@ VstIntPtr VSTCALLBACK IPlugVST::VSTDispatcher(AEffect *pEffect, VstInt32 opCode,
 template <class SAMPLETYPE>
 void IPlugVST::VSTPrepProcess(SAMPLETYPE** inputs, SAMPLETYPE** outputs, VstInt32 nFrames)
 {
-  if (DoesMIDI())
+  if (mDoesMidi)
   {
     mHostCallback(&mAEffect, __audioMasterWantMidiDeprecated, 0, 0, 0, 0.0f);
   }

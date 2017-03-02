@@ -436,9 +436,6 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
-			attributes = {
-				LastUpgradeCheck = 0720;
-			};
 			buildConfigurationList = 1DEB91EF08733DB70010E9CD /* Build configuration list for PBXProject "lice" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
@@ -589,7 +586,6 @@
 				INSTALL_PATH = /usr/local/lib;
 				PRODUCT_NAME = lice;
 				SKIP_INSTALL = YES;
-				SYMROOT = "build-mac";
 			};
 			name = Debug;
 		};
@@ -610,7 +606,6 @@
 				SKIP_INSTALL = YES;
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_STYLE = "non-global";
-				SYMROOT = "build-mac";
 			};
 			name = Release;
 		};
@@ -670,7 +665,6 @@
 				INSTALL_PATH = /usr/local/lib;
 				PRODUCT_NAME = lice32;
 				SKIP_INSTALL = YES;
-				SYMROOT = "build-mac";
 			};
 			name = Debug;
 		};
@@ -692,7 +686,6 @@
 				SKIP_INSTALL = YES;
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_STYLE = "non-global";
-				SYMROOT = "build-mac";
 			};
 			name = Release;
 		};

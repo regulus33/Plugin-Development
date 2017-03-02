@@ -94,45 +94,7 @@ const static unsigned int GLUE_FUNC_LEAVE[1];
     *(INT_PTR *)b = v; 
   }
   const static unsigned char  GLUE_PUSH_P1[4]={0x83, 0xEC, 12,   0x50}; // sub esp, 12, push eax
-
-  #define GLUE_STORE_P1_TO_STACK_AT_OFFS_SIZE 7
-  static void GLUE_STORE_P1_TO_STACK_AT_OFFS(void *b, int offs)
-  {
-    ((unsigned char *)b)[0] = 0x89; // mov [esp+offs], eax
-    ((unsigned char *)b)[1] = 0x84;
-    ((unsigned char *)b)[2] = 0x24;
-    *(int *)((unsigned char *)b+3) = offs;
-  }
-
-  #define GLUE_MOVE_PX_STACKPTR_SIZE 2
-  static void GLUE_MOVE_PX_STACKPTR_GEN(void *b, int wv)
-  {
-    static const unsigned char tab[3][GLUE_MOVE_PX_STACKPTR_SIZE]=
-    {
-      { 0x89, 0xe0 }, // mov eax, esp
-      { 0x89, 0xe7 }, // mov edi, esp
-      { 0x89, 0xe1 }, // mov ecx, esp
-    };    
-    memcpy(b,tab[wv],GLUE_MOVE_PX_STACKPTR_SIZE);
-  }
-
-  #define GLUE_MOVE_STACK_SIZE 6
-  static void GLUE_MOVE_STACK(void *b, int amt)
-  {
-    ((unsigned char *)b)[0] = 0x81;
-    if (amt <0)
-    {
-      ((unsigned char *)b)[1] = 0xEC;
-      *(int *)((char*)b+2) = -amt; // sub esp, -amt
-    }
-    else
-    {
-      ((unsigned char *)b)[1] = 0xc4;
-      *(int *)((char*)b+2) = amt; // add esp, amt
-    }
-  }
-
-
+  
   #define GLUE_POP_PX_SIZE 4
   static void GLUE_POP_PX(void *b, int wv)
   {
@@ -218,26 +180,42 @@ static int GLUE_RESET_WTP(unsigned char *out, void *ptr)
 }
 
 
+
+// for gcc on x86 (msvc should already have _controlfp defined)
+#if !defined(_RC_CHOP) && !defined(EEL_NO_CHANGE_FPFLAGS)
+
+  #include <fpu_control.h>
+  #define _RC_CHOP _FPU_RC_ZERO
+  #define _MCW_RC _FPU_RC_ZERO
+  static unsigned int _controlfp(unsigned int val, unsigned int mask)
+  {
+     unsigned int ret;
+     _FPU_GETCW(ret);
+     if (mask)
+     {
+       ret&=~mask;
+       ret|=val;
+       _FPU_SETCW(ret);
+     }
+     return ret;
+  }
+
+#endif
+
+
 static void GLUE_CALL_CODE(INT_PTR bp, INT_PTR cp, INT_PTR ramptr) 
 {
-  #ifndef NSEEL_EEL1_COMPAT_MODE
-    short oldsw, newsw;
-  #endif
   #ifdef _MSC_VER
+    #ifndef EEL_NO_CHANGE_FPFLAGS
+      unsigned int old_v=_controlfp(0,0); 
+      _controlfp(_RC_CHOP,_MCW_RC);
+    #endif
 
     __asm
     {
-#ifndef NSEEL_EEL1_COMPAT_MODE
-      fnstcw [oldsw]
-      mov ax, [oldsw]
-      or ax, 0xE3F  // 53 or 64 bit precision (depending on whether 0x100 is set), trunc, and masking all exceptions
-      mov [newsw], ax
-      fldcw [newsw]
-#endif
-      
       mov eax, cp
       mov ebx, ramptr
-
+      
       pushad 
       mov ebp, esp
       and esp, -16
@@ -255,38 +233,31 @@ static void GLUE_CALL_CODE(INT_PTR bp, INT_PTR cp, INT_PTR ramptr)
       call eax
       mov esp, ebp
       popad
-#ifndef NSEEL_EEL1_COMPAT_MODE
-      fldcw [oldsw]
-#endif
     };
 
+    #ifndef EEL_NO_CHANGE_FPFLAGS
+      _controlfp(old_v,_MCW_RC);
+    #endif
   #else // gcc x86
+    #ifndef EEL_NO_CHANGE_FPFLAGS
+      unsigned int old_v=_controlfp(0,0); 
+      _controlfp(_RC_CHOP,_MCW_RC);
+    #endif
     __asm__(
-#ifndef NSEEL_EEL1_COMPAT_MODE
-      "fnstcw %2\n"
-      "movw %2, %%ax\n"
-      "orw $0xE3F, %%ax\n" // 53 or 64 bit precision (depending on whether 0x100 is set), trunc, and masking all exceptions
-      "movw %%ax, %3\n"
-      "fldcw %3\n"
-#endif
           "pushl %%ebx\n"
           "movl %%ecx, %%ebx\n"
           "pushl %%ebp\n"
           "movl %%esp, %%ebp\n"
           "andl $-16, %%esp\n" // align stack to 16 bytes
           "subl $12, %%esp\n" // call will push 4 bytes on stack, align for that
-          "call *%%edx\n"
+          "call *%%eax\n"
           "leave\n"
           "popl %%ebx\n"
-#ifndef NSEEL_EEL1_COMPAT_MODE
-      "fldcw %2\n"
-#endif
           ::
-          "d" (cp), "c" (ramptr)
-#ifndef NSEEL_EEL1_COMPAT_MODE
-          , "g" (&oldsw), "g" (&newsw)
-#endif
-          : "%eax","%esi","%edi");
+          "a" (cp), "c" (ramptr): "%edx","%esi","%edi");
+    #ifndef EEL_NO_CHANGE_FPFLAGS
+      _controlfp(old_v,_MCW_RC);
+    #endif
   #endif //gcc x86
 }
 
@@ -310,22 +281,11 @@ static const unsigned char GLUE_LOOP_LOADCNT[]={
         0x81, 0xf9, 1,0,0,0,  // cmp ecx, 1
         0x0F, 0x8C, 0,0,0,0,  // JL <skipptr>
 };
-
-#if NSEEL_LOOPFUNC_SUPPORT_MAXLEN > 0
-#define GLUE_LOOP_CLAMPCNT_SIZE sizeof(GLUE_LOOP_CLAMPCNT)
 static const unsigned char GLUE_LOOP_CLAMPCNT[]={
         0x81, 0xf9, INT_TO_LECHARS(NSEEL_LOOPFUNC_SUPPORT_MAXLEN), // cmp ecx, NSEEL_LOOPFUNC_SUPPORT_MAXLEN
         0x0F, 0x8C, 5,0,0,0,  // JL over-the-mov
         0xB9, INT_TO_LECHARS(NSEEL_LOOPFUNC_SUPPORT_MAXLEN), // mov ecx, NSEEL_LOOPFUNC_SUPPORT_MAXLEN
 };
-#else
-
-#define GLUE_LOOP_CLAMPCNT_SIZE 0
-#define GLUE_LOOP_CLAMPCNT NULL
-
-#endif
-
-#define GLUE_LOOP_BEGIN_SIZE sizeof(GLUE_LOOP_BEGIN)
 static const unsigned char GLUE_LOOP_BEGIN[]={ 
   0x56, //push esi
   0x51, // push ecx
@@ -340,8 +300,6 @@ static const unsigned char GLUE_LOOP_END[]={
 };
 
 
-#if NSEEL_LOOPFUNC_SUPPORT_MAXLEN > 0
-#define GLUE_WHILE_SETUP_SIZE sizeof(GLUE_WHILE_SETUP)
 static const unsigned char GLUE_WHILE_SETUP[]={
         0xB9, INT_TO_LECHARS(NSEEL_LOOPFUNC_SUPPORT_MAXLEN), // mov ecx, NSEEL_LOOPFUNC_SUPPORT_MAXLEN
 };
@@ -359,24 +317,6 @@ static const unsigned char GLUE_WHILE_END[]={
   0x49, // dec ecx
   0x0f, 0x84, 0,0,0,0,  // jz endpt
 };
-
-
-#else
-
-#define GLUE_WHILE_SETUP_SIZE  0
-#define GLUE_WHILE_SETUP NULL
-#define GLUE_WHILE_END_NOJUMP
-static const unsigned char GLUE_WHILE_BEGIN[]={ 
-  0x56, //push esi
-  0x81, 0xEC, 12, 0,0,0, // sub esp, 12
-};
-static const unsigned char GLUE_WHILE_END[]={ 
-  0x81, 0xC4, 12, 0,0,0, // add esp, 12
-  0x5E, // pop esi
-};
-
-#endif
-
 static const unsigned char GLUE_WHILE_CHECK_RV[] = {
   0x85, 0xC0, // test eax, eax
   0x0F, 0x85, 0,0,0,0 // jnz  looppt
@@ -399,26 +339,5 @@ static EEL_F onepointfive=1.5f;
 
 
 #define GLUE_HAS_NATIVE_TRIGSQRTLOG
-
-static void *GLUE_realAddress(void *fn, void *fn_e, int *size)
-{
-  static const unsigned char sig[12] = { 0x89, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
-  unsigned char *p = (unsigned char *)fn;
-
-  #if defined(_DEBUG) && defined(_MSC_VER)
-    if (*p == 0xE9) // this means jump to the following address (debug stub)
-    {
-      p += 5 + *(int *)(p+1);
-    }
-  #endif
-
-  while (memcmp(p,sig,sizeof(sig))) p++;
-  p+=sizeof(sig);
-  fn = p;
-
-  while (memcmp(p,sig,sizeof(sig))) p++;
-  *size = p - (unsigned char *)fn;
-  return fn;
-}
 
 #endif

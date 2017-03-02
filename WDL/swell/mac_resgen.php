@@ -1,5 +1,5 @@
 #!/usr/bin/php
-<?php
+<?
 
 if (!function_exists('file_put_contents')) {
     function file_put_contents($filename, $data, $lockflag) {
@@ -14,32 +14,6 @@ if (!function_exists('file_put_contents')) {
     }
 }
 
-function convertquotes($in) 
-{
-  $ret = "";
-  $qs= 0;
-  for ($x=0;$x<strlen($in); $x++)
-  {
-    if ($in[$x] == '"')
-    {
-      if (!$qs) 
-      {
-        $qs=1;
-      }
-      else
-      {
-        $qs=0;
-        if ($x < strlen($in) && $in[$x+1] == '"') 
-        {
-          $ret .= "\\";
-          continue;
-        }
-      }
-    }
-    $ret .= $in[$x];
-  }
-  return $ret;
-}
 function swell_rc2cpp_dialog($fp) // returns array with ["data"] and optionally ["error"]
 {
   fseek($fp,0,SEEK_SET);
@@ -68,7 +42,6 @@ function swell_rc2cpp_dialog($fp) // returns array with ["data"] and optionally 
   {
     if ($next_line != "") { $x=$next_line; $next_line =""; }
     else if (!($x=fgets($fp))) break;
-    $x = convertquotes($x);
 
     $y=trim($x);
     if ($dlg_state>=2) 
@@ -142,7 +115,7 @@ function swell_rc2cpp_dialog($fp) // returns array with ["data"] and optionally 
                 if (!($next_line )) { $next_line=""; break; }
                 if (substr($next_line,0,1)==" " || substr($next_line,0,1)=="\t")
                 {
-                  $y .= " " . trim(convertquotes($next_line));
+                  $y .= " " . trim($next_line);
                   $rep++;
                   $next_line="";
                 }
@@ -197,7 +170,16 @@ function swell_rc2cpp_menu($fp) // returns array with ["data"] and optionally ["
   $menu_depth=0;
   while (($x=fgets($fp)))
   {
-    $x = convertquotes($x);
+    $a=strpos($x, "\"\"");
+    if ($a)
+    {
+      $b=strpos($x, "\"");
+      $c=strpos($x, "\"", $a+1);
+      if ($b && $c && $b < $a && $c > $a)
+      {
+        $x=str_replace("\"\"", "\\\"", $x);
+      }
+    }
 
     $y=trim($x);
     if ($menu_symbol == "")

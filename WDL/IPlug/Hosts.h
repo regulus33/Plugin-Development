@@ -45,9 +45,7 @@ enum EHost
   kHostAudioMulch,
   kHostStudioOne,
   kHostVST3TestHost,
-  kHostArdour,
-  kHostRenoise,
-  kHostOpenMPT
+  kHostArdour
 
   // These hosts don't report the host name:
   // EnergyXT2

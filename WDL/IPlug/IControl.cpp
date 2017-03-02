@@ -40,14 +40,9 @@ void IControl::SetDirty(bool pushParamToPlug)
     
     if (mValDisplayControl) 
     {
-      WDL_String plusLabel;
       char str[32];
       pParam->GetDisplayForHost(str);
-      plusLabel.Set(str, 32);
-      plusLabel.Append(" ", 32);
-      plusLabel.Append(pParam->GetLabelForHost(), 32);
-      
-      ((ITextControl*)mValDisplayControl)->SetTextFromPlug(plusLabel.Get());
+      ((ITextControl*)mValDisplayControl)->SetTextFromPlug(str);
     }
     
     if (mNameDisplayControl) 
@@ -105,7 +100,28 @@ void IControl::OnMouseDblClick(int x, int y, IMouseMod* pMod)
   #endif
 }
 
-#define PARAM_EDIT_W 40
+void IControl::OnMouseWheel(int x, int y, IMouseMod* pMod, int d)
+{
+  #ifdef PROTOOLS
+  if (pMod->C)
+  {
+    mValue += 0.001 * d;
+  }
+  #else
+  if (pMod->C || pMod->S)
+  {
+    mValue += 0.001 * d;
+  }
+  #endif
+  else
+  {
+    mValue += 0.01 * d;
+  }
+  
+  SetDirty();
+}
+
+#define PARAM_EDIT_W 30
 #define PARAM_EDIT_H 16
 
 void IControl::PromptUserInput()
@@ -221,43 +237,6 @@ void ISwitchControl::OnMouseDown(int x, int y, IMouseMod* pMod)
 void ISwitchControl::OnMouseDblClick(int x, int y, IMouseMod* pMod)
 {
   OnMouseDown(x, y, pMod);
-}
-
-void ISwitchPopUpControl::OnMouseDown(int x, int y, IMouseMod* pMod)
-{
-  PromptUserInput();
-
-  SetDirty();
-}
-
-ISwitchFramesControl::ISwitchFramesControl(IPlugBase* pPlug, int x, int y, int paramIdx, IBitmap* pBitmap, bool imagesAreHorizontal, IChannelBlend::EBlendMethod blendMethod)
-  : ISwitchControl(pPlug, x, y, paramIdx, pBitmap, blendMethod)
-{
-  mDisablePrompt = false;
-  
-  for(int i = 0; i < pBitmap->N; i++)
-  {
-    if (imagesAreHorizontal)
-      mRECTs.Add(mRECT.SubRectHorizontal(pBitmap->N, i)); 
-    else
-      mRECTs.Add(mRECT.SubRectVertical(pBitmap->N, i)); 
-  }
-}
-
-void ISwitchFramesControl::OnMouseDown(int x, int y, IMouseMod* pMod)
-{
-  int n = mRECTs.GetSize();
-  
-  for (int i = 0; i < n; i++) 
-  {
-    if (mRECTs.Get()[i].Contains(x, y)) 
-    {
-      mValue = (double) i / (double) (n - 1);
-      break;
-    }
-  }
-  
-  SetDirty();
 }
 
 IInvisibleSwitchControl::IInvisibleSwitchControl(IPlugBase* pPlug, IRECT pR, int paramIdx)
@@ -463,27 +442,6 @@ void IFaderControl::OnMouseDrag(int x, int y, int dX, int dY, IMouseMod* pMod)
   return SnapToMouse(x, y);
 }
 
-void IFaderControl::OnMouseWheel(int x, int y, IMouseMod* pMod, int d)
-{
-#ifdef PROTOOLS
-  if (pMod->C)
-  {
-    mValue += 0.001 * d;
-  }
-#else
-  if (pMod->C || pMod->S)
-  {
-    mValue += 0.001 * d;
-  }
-#endif
-  else
-  {
-    mValue += 0.01 * d;
-  }
-  
-  SetDirty();
-}
-
 void IFaderControl::SnapToMouse(int x, int y)
 {
   if (mDirection == kVertical)
@@ -539,27 +497,6 @@ void IKnobControl::OnMouseDrag(int x, int y, int dX, int dY, IMouseMod* pMod)
     mValue += (double) dX / (double) (mRECT.R - mRECT.L) / gearing;
   }
 
-  SetDirty();
-}
-
-void IKnobControl::OnMouseWheel(int x, int y, IMouseMod* pMod, int d)
-{
-#ifdef PROTOOLS
-  if (pMod->C)
-  {
-    mValue += 0.001 * d;
-  }
-#else
-  if (pMod->C || pMod->S)
-  {
-    mValue += 0.001 * d;
-  }
-#endif
-  else
-  {
-    mValue += 0.01 * d;
-  }
-  
   SetDirty();
 }
 

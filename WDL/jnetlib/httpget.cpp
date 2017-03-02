@@ -148,7 +148,7 @@ void JNL_HTTPGet::connect(const char *url, int ver, const char *requestmethod)
     return;
   }
 
-  size_t sendbufferlen=0;
+  int sendbufferlen=0;
 
   if (!m_http_proxyhost || !m_http_proxyhost[0])
   {
@@ -180,14 +180,14 @@ void JNL_HTTPGet::connect(const char *url, int ver, const char *requestmethod)
 
   if (!m_http_proxyhost || !m_http_proxyhost[0])
   {
-    sprintf(str,"%s %s HTTP/1.%d\r\n",requestmethod,m_http_request,ver%10);
+    wsprintf(str,"%s %s HTTP/1.%d\r\n",requestmethod,m_http_request,ver%10);
   }
   else
   {
-    sprintf(str,"%s %s HTTP/1.%d\r\n",requestmethod, m_http_url,ver%10);
+    wsprintf(str,"%s %s HTTP/1.%d\r\n",requestmethod, m_http_url,ver%10);
   }
 
-  sprintf(str+strlen(str),"Host:%s\r\n",m_http_host);
+  wsprintf(str+strlen(str),"Host:%s\r\n",m_http_host);
 
   if (m_http_lpinfo&&m_http_lpinfo[0])
   {
@@ -207,7 +207,7 @@ void JNL_HTTPGet::connect(const char *url, int ver, const char *requestmethod)
 
   int a=m_recvbufsize;
   if (a < 4096) a=4096;
-  m_con=new JNL_Connection(m_dns,(int)strlen(str)+4,a);
+  m_con=new JNL_Connection(m_dns,strlen(str)+4,a);
   if (m_con)
   {
     if (!m_http_proxyhost || !m_http_proxyhost[0])
@@ -285,25 +285,24 @@ const char *JNL_HTTPGet::getallheaders()
 
 const char *JNL_HTTPGet::getheader(const char *headername)
 {
-  if (!headername || !m_recvheaders) return NULL;
-
-  size_t headername_len = strlen(headername);
-  if (headername_len<1) return NULL;
-
-  if (headername[headername_len - 1] == ':') headername_len--;
-
-  const char *p=m_recvheaders;
+  char *ret=NULL;
+  if (strlen(headername)<1||!m_recvheaders) return NULL;
+  char *buf=(char*)malloc(strlen(headername)+2);
+  strcpy(buf,headername);
+  if (buf[strlen(buf)-1]!=':') strcat(buf,":");
+  char *p=m_recvheaders;
   while (*p)
   {
-    if (!strnicmp(headername,p,headername_len) && p[headername_len] == ':')
+    if (!strnicmp(buf,p,strlen(buf)))
     {
-      p += headername_len + 1;
-      while (*p == ' ') p++;
-      return p;
+      ret=p+strlen(buf);
+      while (*ret == ' ') ret++;
+      break;
     }
     p+=strlen(p)+1;
   }
-  return NULL;
+  free(buf);
+  return ret;
 }
 
 int JNL_HTTPGet::run()
@@ -380,7 +379,7 @@ run_again:
       if (!buf[0]) { m_http_state=3; break; }
       if (!m_recvheaders)
       {
-        m_recvheaders_size=(int)strlen(buf)+1;
+        m_recvheaders_size=strlen(buf)+1;
         m_recvheaders=(char*)malloc(m_recvheaders_size+1);
         if (m_recvheaders)
         {
@@ -391,7 +390,7 @@ run_again:
       else
       {
         int oldsize=m_recvheaders_size;
-        m_recvheaders_size+=(int)strlen(buf)+1;
+        m_recvheaders_size+=strlen(buf)+1;
         char *n=(char*)malloc(m_recvheaders_size+1);
         if (n)
         {

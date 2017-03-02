@@ -48,6 +48,9 @@
   #include "IGraphicsMac.h"
   #define EXPORT __attribute__ ((visibility("default")))
   #define BUNDLE_ID "com." BUNDLE_MFR "." API_EXT "." BUNDLE_NAME
+#elif defined OS_IOS
+  #define EXPORT __attribute__ ((visibility("default")))
+  #define BUNDLE_ID "com." BUNDLE_MFR "." API_EXT "." BUNDLE_NAME
 #elif defined OS_LINUX
   //TODO
 #endif

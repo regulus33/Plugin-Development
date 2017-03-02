@@ -25,10 +25,9 @@
 
 #include <math.h>
 #include "virtwnd-controls.h"
-#include "../wdlcstring.h"
 #include "../lice/lice.h"
 
-void vwnd_slider_drawknobstack(LICE_IBitmap *drawbm, double val, WDL_VirtualWnd_BGCfg *knobimage, int ksw, int ksh, int ks_offs, int dx, int dy, int dw, int dh, float alpha)
+void vwnd_slider_drawknobstack(LICE_IBitmap *drawbm, double val, WDL_VirtualWnd_BGCfg *knobimage, int ksw, int ksh, int ks_offs, int dx, int dy, int dw, int dh, double alpha)
 {
   const bool v = knobimage->bgimage->getWidth() < knobimage->bgimage->getHeight();
 
@@ -67,8 +66,7 @@ void vwnd_slider_drawknobstack(LICE_IBitmap *drawbm, double val, WDL_VirtualWnd_
     }
   }
 
-  LICE_ScaledBlit(drawbm,knobimage->bgimage,dx,dy,dw,dh,
-    (float) (ks_offs + (v?0:p)),(float)(ks_offs + (v?p:0)),(float)ksw,(float)ksh,alpha,LICE_BLIT_USE_ALPHA|LICE_BLIT_FILTER_BILINEAR);
+  LICE_ScaledBlit(drawbm,knobimage->bgimage,dx,dy,dw,dh,ks_offs + (v?0:p),ks_offs + (v?p:0),ksw,ksh,alpha,LICE_BLIT_USE_ALPHA|LICE_BLIT_FILTER_BILINEAR);
 }
 
 
@@ -162,7 +160,6 @@ WDL_VirtualWnd_BGCfg *vwnd_slider_getknobimageforsize(WDL_VirtualWnd_BGCfg *knob
 
 WDL_VirtualSlider::WDL_VirtualSlider()
 {
-  m_accessDescCopy=0;
   m_knob_lineextrasize=0;
   m_knobbias=0;
   m_zl_color = m_knob_color=0;
@@ -185,7 +182,6 @@ WDL_VirtualSlider::WDL_VirtualSlider()
 
 WDL_VirtualSlider::~WDL_VirtualSlider()
 {
-  free(m_accessDescCopy);
 }
 
 bool WDL_VirtualSlider::GetIsVert()
@@ -236,9 +232,7 @@ static void AdjustThumbImageSize(int wndw, int wndh, WDL_VirtualSlider_SkinConfi
 
 void WDL_VirtualSlider_PreprocessSkinConfig(WDL_VirtualSlider_SkinConfig *a)
 {
-  if (!a) return;
-
-  if (a->thumbimage[0])
+  if (a&&a->thumbimage[0])
   {
     int w=a->thumbimage[0]->getWidth();
     int h=a->thumbimage[0]->getHeight();
@@ -248,7 +242,7 @@ void WDL_VirtualSlider_PreprocessSkinConfig(WDL_VirtualSlider_SkinConfig *a)
     for (x = w-1; x > a->thumbimage_lt[0]+1 && LICE_GetPixel(a->thumbimage[0],x,h-1)==LICE_RGBA(255,0,255,255); x --);
     a->thumbimage_rb[0] = x;
   }
-  if (a->thumbimage[1])
+  if (a&&a->thumbimage[1])
   {
     int w=a->thumbimage[1]->getWidth();
     int h=a->thumbimage[1]->getHeight();
@@ -308,6 +302,7 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
   LICE_IBitmap *bm_image=m_skininfo ? m_skininfo->thumbimage[isVert] : 0;
   int bm_w=16,bm_h=16,bm_w2=16,bm_h2=16;
   int imgoffset=0;
+  HBITMAP bm=0;
   bool wantKnob=false;
   if (bm_image)
   {
@@ -338,7 +333,7 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
 
     if (wantKnob)
     {
-      int sz= wdl_min(vieww,viewh);
+      int sz= min(vieww,viewh);
       origin_x += (vieww-sz)/2;
       origin_y += (viewh-sz)/2;
       vieww = viewh = sz;       
@@ -386,7 +381,7 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
         int y=((m_maxr-center)*(viewh-bm_h2))/rsize + ((bm_h-1)/2-imgoffset);
 
         if (!zlc) zlc = LICE_RGBA_FROMNATIVE(GSC(COLOR_BTNTEXT),255);
-        LICE_Line(drawbm,origin_x+2,origin_y+y,origin_x+vieww-2,origin_y+y, zlc, LICE_GETA(zlc)/255.0f, LICE_BLIT_MODE_COPY,false);
+        LICE_Line(drawbm,origin_x+2,origin_y+y,origin_x+vieww-2,origin_y+y, zlc, LICE_GETA(zlc)/255.0, LICE_BLIT_MODE_COPY,false);
       }
 
 
@@ -453,8 +448,8 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
       float val;
       int center=m_center;
       if (center < 0) center=WDL_STYLE_GetSliderDynamicCenterPos();
-      if (center > m_minr && (m_pos < center || center >= m_maxr)) val = (m_pos-center) / (float)(center-m_minr);
-      else val = (m_pos-center) / (float)(m_maxr-center);
+      if (center > m_minr && (m_pos < center || center >= m_maxr)) val = (m_pos-center) / (double)(center-m_minr);
+      else val = (m_pos-center) / (double)(m_maxr-center);
 
       if (knobimage && ksw>0 && ksh>0)
       {
@@ -469,12 +464,12 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
         float alpha = LICE_GETA(col)/255.0f;
         int cx=origin_x+vieww/2;
         int cy=origin_y+viewh/2;
-        float rd = (float) (vieww/2-4 + m_knob_lineextrasize);
+        float rd = vieww/2-4 + m_knob_lineextrasize;
         float r2=rd*0.125f;
-        if (!back_image) LICE_Circle(drawbm, (float)cx, (float)cy, rd, col, alpha, LICE_BLIT_MODE_COPY, true);
+        if (!back_image) LICE_Circle(drawbm, cx, cy, rd, col, alpha, LICE_BLIT_MODE_COPY, true);
       
         #define KNOBANGLE_MAX (3.14159*7.0/8.0);
-        float a = val*(float)KNOBANGLE_MAX;
+        float a = val*KNOBANGLE_MAX;
         float sina=sin(a);
         float cosa=cos(a);
         float x1=cx+r2*sina;
@@ -530,7 +525,7 @@ void WDL_VirtualSlider::OnPaint(LICE_IBitmap *drawbm, int origin_x, int origin_y
       if (!zlc) zlc = LICE_RGBA_FROMNATIVE(GSC(COLOR_BTNTEXT),255);
 
       LICE_Line(drawbm,origin_x+x,origin_y+2,origin_x+x,origin_y+viewh-2,
-        zlc, LICE_GETA(zlc)/255.0f, LICE_BLIT_MODE_COPY,false);
+        zlc, LICE_GETA(zlc)/255.0, LICE_BLIT_MODE_COPY,false);
     }
 
     if (!back_image)
@@ -667,7 +662,7 @@ int WDL_VirtualSlider::OnMouseDown(int xpos, int ypos)
       if (hit)
       {
         m_move_offset=bm_h/2;
-        int pos=(int)(m_minr+((viewh-bm_h - (ypos-m_move_offset))*rsize)/(double)(viewh-bm_h));
+        int pos=m_minr+((viewh-bm_h - (ypos-m_move_offset))*rsize)/(viewh-bm_h);
         if (pos < m_minr)pos=m_minr;
         else if (pos > m_maxr)pos=m_maxr;
         m_pos=pos;
@@ -705,7 +700,7 @@ int WDL_VirtualSlider::OnMouseDown(int xpos, int ypos)
       if (hit)
       {
         m_move_offset=bm_w/2;
-        int pos=(int) (m_minr+((xpos-m_move_offset)*rsize)/(double)(vieww-bm_w));
+        int pos=m_minr+((xpos-m_move_offset)*rsize)/(vieww-bm_w);
         if (pos < m_minr)pos=m_minr;
         else if (pos > m_maxr)pos=m_maxr;
         m_pos=pos;
@@ -780,7 +775,7 @@ void WDL_VirtualSlider::OnMoveOrUp(int xpos, int ypos, int isup)
     }
     else 
     {
-      pos=m_minr + (int) (((double)(viewh-bm_h - ypos + m_move_offset)*(double)rsize)/(double)(viewh-bm_h));
+      pos=m_minr+ (((double)(viewh-bm_h - ypos + m_move_offset)*(double)rsize)/(double)(viewh-bm_h));
     }
     if (pos < m_minr)pos=m_minr;
     else if (pos > m_maxr)pos=m_maxr;
@@ -821,7 +816,7 @@ void WDL_VirtualSlider::OnMoveOrUp(int xpos, int ypos, int isup)
     }
     else 
     {
-      pos=m_minr + (int) (((double)(xpos - m_move_offset)*(double)rsize)/(double)(vieww-bm_w));
+      pos=m_minr + (((double)(xpos - m_move_offset)*(double)rsize)/(double)(vieww-bm_w));
     }
     if (pos < m_minr)pos=m_minr;
     else if (pos > m_maxr)pos=m_maxr;
@@ -879,12 +874,12 @@ void WDL_VirtualSlider::OnMoveOrUp(int xpos, int ypos, int isup)
 
         if (isVert) 
         {
-          m_last_y=(int) ((viewh - bm_h - (((m_pos-m_minr) * (viewh-bm_h))/rsize))+m_move_offset);
+          m_last_y=( viewh - bm_h - (((m_pos-m_minr) * (viewh-bm_h))/rsize))+m_move_offset;
           p.y=m_last_y+pt.y;
         }
         else 
         {
-          m_last_x= (int) (((((m_pos-m_minr) * (vieww-bm_w))/rsize))+m_move_offset);
+          m_last_x=( (((m_pos-m_minr) * (vieww-bm_w))/rsize))+m_move_offset;
           p.x=m_last_x+pt.x;
         }
       }
@@ -971,10 +966,7 @@ bool WDL_VirtualSlider::OnMouseWheel(int xpos, int ypos, int amt)
 {
   if (m_grayed) return false;
 
-  if (xpos != -100 || ypos != -100) // xpos=ypos=-100 used by virtwnd-nsaccessibility
-  {
-    if (!WDL_STYLE_AllowSliderMouseWheel()) return false;
-  }
+  if (!WDL_STYLE_AllowSliderMouseWheel()) return false;
 
   bool isVert = GetIsVert();
 	int l=amt;
@@ -1009,54 +1001,6 @@ int WDL_VirtualSlider::GetSliderPosition()
   if (m_pos < m_minr) return m_minr; 
   if (m_pos > m_maxr) return m_maxr; 
   return m_pos; 
-}
-
-bool WDL_VirtualSlider::GetAccessValueDesc(char *buf, int bufsz)
-{
-  if (m_valueText.GetLength())
-  {
-    if (!strcmp(m_valueText.Get(),"#"))
-    {
-      snprintf(buf,bufsz,"%d",m_pos);
-      return true;
-    }
-
-    lstrcpyn_safe(buf,m_valueText.Get(),bufsz);
-    return true;
-  }
-  if (m_maxr > m_minr)
-  {
-    snprintf(buf,bufsz,"%.1f%%",((m_pos-m_minr)*100.0) / (m_maxr-m_minr));
-    return true;
-  }
-  return false;
-}
-
-void WDL_VirtualSlider::SetAccessDescCopy(const char *str)
-{
-  char *op = m_accessDescCopy;  
-  if (str && *str)
-  {
-    if (op && !strcmp(op,str)) return;
-
-    m_accessDescCopy = strdup(str);
-    SetAccessDesc(m_accessDescCopy);
-  }
-  else
-  {
-    SetAccessDesc("");
-    m_accessDescCopy=NULL;
-  }
-  free(op);
-}
-void WDL_VirtualSlider::SetAccessValueDesc(const char *str)
-{
-  if (!str) str="";
-  if (strcmp(m_valueText.Get(),str))
-  {
-    m_valueText.Set(str);
-    if (m__iaccess) m__iaccess->OnStateChange();
-  }
 }
 
 void WDL_VirtualSlider::SetSliderPosition(int pos) 
@@ -1146,7 +1090,7 @@ void WDL_VirtualSlider::GetPositionPaintExtent(RECT *r)
     const int viewh=m_position.bottom-m_position.top;
     const int vieww=m_position.right-m_position.left;
     {
-      int sz= wdl_min(vieww,viewh);
+      int sz= min(vieww,viewh);
       int ox = m_position.left + (vieww-sz)/2;
       int oy = m_position.top + (viewh-sz)/2;
 

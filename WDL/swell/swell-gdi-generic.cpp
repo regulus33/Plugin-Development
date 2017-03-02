@@ -124,12 +124,6 @@ HFONT CreateFontIndirect(LOGFONT *lf)
                     lf->lfQuality, lf->lfPitchAndFamily, lf->lfFaceName);
 }
 
-int GetTextFace(HDC ctx, int nCount, LPTSTR lpFaceName)
-{
-  if (lpFaceName) lpFaceName[0]=0;
-  return 0;
-}
-
 void DeleteObject(HGDIOBJ pen)
 {
   if (HGDIOBJ_VALID(pen))
@@ -183,6 +177,7 @@ HGDIOBJ SelectObject(HDC ctx, HGDIOBJ pen)
   
     if (p->type == TYPE_FONT)
     {
+//      CGContextSelectFont(c->ctx,p->fontface,(float)p->wid,kCGEncodingMacRoman);
     }
   }
   return op;
@@ -190,7 +185,7 @@ HGDIOBJ SelectObject(HDC ctx, HGDIOBJ pen)
 
 
 
-void SWELL_FillRect(HDC ctx, const RECT *r, HBRUSH br)
+void SWELL_FillRect(HDC ctx, RECT *r, HBRUSH br)
 {
   HDC__ *c=(HDC__ *)ctx;
   HGDIOBJ__ *b=(HGDIOBJ__ *) br;
@@ -293,7 +288,7 @@ void Polygon(HDC ctx, POINT *pts, int npts)
   }
   if (HGDIOBJ_VALID(c->curpen,TYPE_PEN) && c->curpen->wid>=0)
   {
-//    CGContextSetLineWidth(c->ctx,(float)wdl_max(c->curpen->wid,1));
+//    CGContextSetLineWidth(c->ctx,(float)max(c->curpen->wid,1));
  //   CGContextSetStrokeColorWithColor(c->ctx,c->curpen->color);	
   }
 //  CGContextDrawPath(c->ctx,c->curpen && c->curpen->wid>=0 && c->curbrush && c->curbrush->wid>=0 ?  kCGPathFillStroke : c->curpen && c->curpen->wid>=0 ? kCGPathStroke : kCGPathFill);
@@ -317,7 +312,7 @@ void PolyBezierTo(HDC ctx, POINT *pts, int np)
   HDC__ *c=(HDC__ *)ctx;
   if (!HDC_VALID(c)||!HGDIOBJ_VALID(c->curpen,TYPE_PEN)||c->curpen->wid<0||np<3) return;
   
-//  CGContextSetLineWidth(c->ctx,(float)wdl_max(c->curpen->wid,1));
+//  CGContextSetLineWidth(c->ctx,(float)max(c->curpen->wid,1));
 //  CGContextSetStrokeColorWithColor(c->ctx,c->curpen->color);
 	
 //  CGContextBeginPath(c->ctx);
@@ -344,7 +339,7 @@ void SWELL_LineTo(HDC ctx, int x, int y)
   HDC__ *c=(HDC__ *)ctx;
   if (!HDC_VALID(c)||!HGDIOBJ_VALID(c->curpen,TYPE_PEN)||c->curpen->wid<0) return;
 
-//  CGContextSetLineWidth(c->ctx,(float)wdl_max(c->curpen->wid,1));
+//  CGContextSetLineWidth(c->ctx,(float)max(c->curpen->wid,1));
 //  CGContextSetStrokeColorWithColor(c->ctx,c->curpen->color);
 	
 //  CGContextBeginPath(c->ctx);
@@ -362,7 +357,7 @@ void PolyPolyline(HDC ctx, POINT *pts, DWORD *cnts, int nseg)
   HDC__ *c=(HDC__ *)ctx;
   if (!HDC_VALID(c)||!HGDIOBJ_VALID(c->curpen,TYPE_PEN)||c->curpen->wid<0||nseg<1) return;
 
-//  CGContextSetLineWidth(c->ctx,(float)wdl_max(c->curpen->wid,1));
+//  CGContextSetLineWidth(c->ctx,(float)max(c->curpen->wid,1));
 //  CGContextSetStrokeColorWithColor(c->ctx,c->curpen->color);
 	
 //  CGContextBeginPath(c->ctx);
@@ -470,7 +465,7 @@ HICON LoadNamedImage(const char *name, bool alphaFromMask)
   return 0; // todo
 }
 
-void DrawImageInRect(HDC ctx, HICON img, const RECT *r)
+void DrawImageInRect(HDC ctx, HICON img, RECT *r)
 {
   // todo
 }
@@ -538,7 +533,7 @@ void SWELL_PushClipRegion(HDC ctx)
 //  if (ct && ct->ctx) CGContextSaveGState(ct->ctx);
 }
 
-void SWELL_SetClipRegion(HDC ctx, const RECT *r)
+void SWELL_SetClipRegion(HDC ctx, RECT *r)
 {
   HDC__ *ct=(HDC__ *)ctx;
 //  if (ct && ct->ctx) CGContextClipToRect(ct->ctx,CGRectMake(r->left,r->top,r->right-r->left,r->bottom-r->top));
@@ -573,7 +568,7 @@ void ReleaseDC(HWND h, HDC hdc)
 {
 }
 
-void SWELL_FillDialogBackground(HDC hdc, const RECT *r, int level)
+void SWELL_FillDialogBackground(HDC hdc, RECT *r, int level)
 {
 }
 
@@ -674,30 +669,7 @@ int ImageList_ReplaceIcon(HIMAGELIST list, int offset, HICON image)
   return offset;
 }
 
-int ImageList_Add(HIMAGELIST list, HBITMAP image, HBITMAP mask)
-{
-  if (!image || !list) return -1;
-  WDL_PtrList<HGDIOBJ__> *l=(WDL_PtrList<HGDIOBJ__> *)list;
-  
-  HGDIOBJ__ *imgsrc = (HGDIOBJ__*)image;
-  if (!HGDIOBJ_VALID(imgsrc,TYPE_BITMAP)) return -1;
-  
-  HGDIOBJ__* icon=GDP_OBJECT_NEW();
-  icon->type=TYPE_BITMAP;
-  icon->wid=1;
-  // todo: copy underlying image
 
-  image = (HICON) icon;
-  
-  l->Add(image);
-  return l->GetSize();
-}
-
-
-int AddFontResourceEx(LPCTSTR str, DWORD fl, void *pdv)
-{
-  return 0;
-}
 
 
 #endif

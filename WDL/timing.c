@@ -21,10 +21,6 @@ static void rdtsc(__int64 *t)
   LARGE_INTEGER now;
   QueryPerformanceCounter(&now);
   *t = now.QuadPart;
-#elif !defined(_WIN32)
-  struct timeval tm={0,};
-  gettimeofday(&tm,NULL);
-  *t = ((__int64)tm.tv_sec)*1000000 + (__int64)tm.tv_usec;
 #else
 	__asm 
 	{
@@ -71,25 +67,17 @@ void _timingPrint(void)
       x,timingInfo[x].calls,(timingInfo[x].cycles/(double)timingInfo[x].calls),
       (double)timingInfo[x].mint,(double)timingInfo[x].maxt,
         (double)timingInfo[x].cycles 
-#if defined(_WIN64) || !defined(_WIN32)
+#ifdef _WIN64
           / 1000000.0
 #else
         / (2.4*1000.0*1000.0*1000.0)
 #endif
           
       );
-#ifdef _WIN32
       OutputDebugString(buf);
-#else
-      printf("%s",buf);
-#endif
     }
 	}
-#ifdef _WIN32
   if (!p) OutputDebugString("no calls to timing lib\n");
-#else
-  if (!p) printf("no calls to timing lib\n");
-#endif
   
 	timingInit();
 }

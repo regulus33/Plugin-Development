@@ -140,11 +140,7 @@ public:
     }
 
 #ifdef WDL_WIN32_NATIVE_WRITE
-    #ifdef WDL_SUPPORT_WIN9X
-    const bool isNT = (GetVersion()<0x80000000);
-    #else
-    const bool isNT = true;
-    #endif
+    bool isNT = (GetVersion()<0x80000000);
     m_async = allow_async && isNT;
 #ifdef WIN32_ASYNC_NOBUF_WRITE
     bufsize = (bufsize+4095)&~4095;
@@ -276,7 +272,7 @@ public:
    {
      if (m_bufspace.GetSize() > 0 && m_bufspace_used>0)
      {
-       int v=(int)pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
+       int v=pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
        if (v>0) m_file_position+=v;
        if (m_file_position > m_file_max_position) m_file_max_position=m_file_position;
        m_bufspace_used=0;
@@ -312,7 +308,8 @@ public:
 
     if (m_async)
     {
-      int rdpos = 0;
+      char *pbuf=(char *)buf;
+
       while (len > 0)
       {
         if (!m_empties.GetSize()) 
@@ -357,18 +354,18 @@ public:
 
         int ml=ent->m_bufsz-ent->m_bufused;
         if (ml>len) ml=len;
-        memcpy(ent->m_bufptr+ent->m_bufused,(const char *)buf + rdpos,ml);
+        memcpy(ent->m_bufptr+ent->m_bufused,pbuf,ml);
 
         ent->m_bufused+=ml;
         len-=ml;
-        rdpos+=ml;
+        pbuf+=ml;
 
         if (ent->m_bufused >= ent->m_bufsz)
         {
           if (RunAsyncWrite(ent,true)) m_empties.Delete(0); // if queued remove from list
         }
       }
-      return rdpos; 
+      return pbuf - (char *)buf; 
     }
     else
     {
@@ -398,7 +395,7 @@ public:
        }
        if (m_bufspace_used >= m_bufspace.GetSize())
        {
-         int v=(int)pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
+         int v=pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
          if (v>0) m_file_position+=v;
          m_bufspace_used=0;
        }
@@ -407,7 +404,7 @@ public:
    }
    else
    {
-     int v=(int)pwrite(m_filedes,buf,len,m_file_position);
+     int v=pwrite(m_filedes,buf,len,m_file_position);
      if (v>0) m_file_position+=v;
      if (m_file_position > m_file_max_position) m_file_max_position=m_file_position;
      return v;
@@ -594,7 +591,7 @@ public:
     if (m_filedes < 0) return true;
     if (m_bufspace.GetSize() > 0 && m_bufspace_used>0)
     {
-      int v=(int)pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
+      int v=pwrite(m_filedes,m_bufspace.Get(),m_bufspace_used,m_file_position);
       if (v>0) m_file_position+=v;
       if (m_file_position > m_file_max_position) m_file_max_position=m_file_position;
       m_bufspace_used=0;

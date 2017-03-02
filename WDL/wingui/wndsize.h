@@ -71,6 +71,7 @@ struct WDL_WndSizer__rec
   RECT last;
   float scales[4];
   WDL_VWnd *vwnd;
+
 };
 
 class WDL_WndSizer
@@ -97,25 +98,25 @@ public:
   void remove_itemvirt(WDL_VWnd *vwnd);
   void remove_itemhwnd(HWND h);
 
-  WDL_WndSizer__rec *get_item(int dlg_id) const;
-  WDL_WndSizer__rec *get_itembyindex(int idx) const;
-  WDL_WndSizer__rec *get_itembywnd(HWND h) const;
-  WDL_WndSizer__rec *get_itembyvirt(WDL_VWnd *vwnd) const;
+  WDL_WndSizer__rec *get_item(int dlg_id);
+  WDL_WndSizer__rec *get_itembyindex(int id);
+  WDL_WndSizer__rec *get_itembywnd(HWND h);
+  WDL_WndSizer__rec *get_itembyvirt(WDL_VWnd *vwnd);
   
-  RECT get_orig_rect() const { RECT r={0,0,m_orig_size.x,m_orig_size.y}; return r; }
+  RECT get_orig_rect() { RECT r={0,0,m_orig_size.x,m_orig_size.y}; return r; }
   void set_orig_rect(const RECT *r, const POINT *minSize=NULL) 
   {
     if (r) { m_orig_size.x = r->right; m_orig_size.y = r->bottom; } 
     if (minSize) m_min_size = *minSize;
     else m_min_size.x=m_min_size.y=0;
   }
-  POINT get_min_size(bool applyMargins=false) const;
+  POINT get_min_size(bool applyMargins=false);
 
   void onResize(HWND only=0, int notouch=0, int xtranslate=0, int ytranslate=0);
 
 
   void set_margins(int left, int top, int right, int bottom) { m_margins.left=left; m_margins.top=top; m_margins.right=right; m_margins.bottom=bottom; }
-  void get_margins(int *left, int *top, int *right, int *bottom) const 
+  void get_margins(int *left, int *top, int *right, int *bottom) 
   {
     if (left) *left=m_margins.left;
     if (top) *top=m_margins.top;
@@ -123,7 +124,7 @@ public:
     if (bottom) *bottom=m_margins.bottom;
   }
 
-  void transformRect(RECT *r, const float *scales, const RECT *wndSize) const;
+  void transformRect(RECT *r, const float *scales, const RECT *wndSize);
 
 private:
 #ifdef _WIN32
@@ -134,7 +135,8 @@ private:
   POINT m_orig_size,m_min_size;
   RECT m_margins;
 
-  WDL_TypedBuf<WDL_WndSizer__rec> m_list;
+  // treat as WDL_WndSizer__rec[]
+  WDL_HeapBuf m_list;
 
 };
 

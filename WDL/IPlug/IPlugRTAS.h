@@ -61,6 +61,7 @@ protected:
   bool SendMidiMsg(IMidiMsg* pMsg);
 
 private:
+  bool mDoesMidi;
   bool mHasSideChain, mSideChainIsConnected;
   int mSideChainConnectionNum;
   class IPlugProcess *mProcess;

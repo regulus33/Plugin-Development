@@ -19,7 +19,7 @@
   3. This notice may not be removed or altered from any source distribution.
   
 
-  This file provides a simple interface for using lame_enc/libmp3lame MP3 encoding
+  This file provides a simple interface for using lame_enc.dll on Windows for MP3 encoding and decoding.
 
 */
 
@@ -30,11 +30,29 @@
 #include "queue.h"
 #include "wdlstring.h"
 
+#ifdef _WIN32
+  #ifndef _WIN64
+    #define USE_LAME_BLADE_API
+  #endif
+#endif
+
+#ifndef USE_LAME_BLADE_API
+  #define DYNAMIC_LAME
+
+  #ifdef DYNAMIC_LAME
+    typedef void *lame_t;
+  #else
+    #include <lame/lame.h>
+  #endif
+#endif
+
+
+
 class LameEncoder
 {
   public:
 
-    LameEncoder(int srate, int nch, int bitrate, int stereomode = 1, int quality = 2, int vbrmethod = -1, int vbrquality = 2, int vbrmax = 320, int abr = 128);
+    LameEncoder(int srate, int nch, int bitrate, int stereomode = 1, int quality = 0, int vbrmethod = -1, int vbrquality = 2, int vbrmax = 320, int abr = 128);
     ~LameEncoder();
 
     int Status() { return errorstat; } // 1=no dll, 2=error
@@ -51,10 +69,8 @@ class LameEncoder
       spltmp[1].Compact();
     }
 
-    static const char *GetInfo();
-    static const char *GetLibName();
-    static int CheckDLL(); // returns >0 if DLL present, 1 for lame, 2 for old bladeenc
-    static void InitDLL(const char *extrapath=NULL, bool forceRetry=false); // call with extrapath != NULL if you want to try loading from another path
+    static bool CheckDLL(); // returns true if dll is present
+    static void InitDLL(const char *extrapath=NULL); // call with extrapath != NULL if you want to try loading from another path
 
     void SetVBRFilename(const char *fn)
     {
@@ -64,15 +80,57 @@ class LameEncoder
     int GetNumChannels() { return m_encoder_nch; }
     
   private:
-    void *m_lamestate;
+    int m_nch,m_encoder_nch;
     WDL_Queue spltmp[2];
     WDL_HeapBuf outtmp;
     WDL_String m_vbrfile;
     int errorstat;
     int in_size_samples;
-    int m_encmode; // 1 for LAME, 2 for blade
-    int m_nch,m_encoder_nch;
-
+#ifdef USE_LAME_BLADE_API
+    UINT_PTR hbeStream;
+#else
+    lame_t m_lamestate;
+#endif
 };
+
+class LameDecoder
+{
+  public:
+    LameDecoder();
+    ~LameDecoder();
+
+    int GetSampleRate() { return m_srate?m_srate:48000; }
+    int GetNumChannels() { return m_nch?m_nch:1; }
+
+    WDL_HeapBuf m_samples; // we let the size get as big as it needs to, so we don't worry about tons of mallocs/etc
+    int m_samples_used;
+
+    void *DecodeGetSrcBuffer(int srclen)
+    {
+      if (srctmp.GetSize() < srclen) srctmp.Resize(srclen);
+      return srctmp.Get();
+    }
+    void DecodeWrote(int srclen);
+
+    int GetError() { return errorstat; }
+
+    void Reset();
+
+    int m_samplesdec;
+
+  private:
+    WDL_HeapBuf srctmp;
+    int errorstat;
+    int m_srate,m_nch;
+    int m_samples_remove;
+
+#ifdef USE_LAME_BLADE_API
+    void *decinst;
+#else
+    lame_t *decinst;
+#endif
+};
+
+
 
 #endif

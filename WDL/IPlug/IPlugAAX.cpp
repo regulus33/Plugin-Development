@@ -122,6 +122,7 @@ IPlugAAX::IPlugAAX(IPlugInstanceInfo instanceInfo,
 
 , AAX_CIPlugParameters()
 , mTransport(0)
+, mDoesMidi(plugDoesMidi)
 {
   Trace(TRACELOC, "%s%s", effectName, channelIOStr);
 
@@ -292,7 +293,7 @@ void IPlugAAX::RenderAudio(AAX_SIPlugRenderInfo* ioRenderInfo)
   Controller()->GetInputStemFormat(&inFormat);
   Controller()->GetOutputStemFormat(&outFormat);
   
-  if (DoesMIDI()) 
+  if (mDoesMidi) 
   {
     AAX_IMIDINode* midiIn = ioRenderInfo->mInputNode;
     AAX_CMidiStream* midiBuffer = midiIn->GetNodeBuffer();
@@ -461,6 +462,12 @@ void IPlugAAX::EndInformHostOfParamChange(int idx)
   ReleaseParameter(mParamIDs.Get(idx)->Get());
 }
 
+void IPlugAAX::SetParameterFromGUI(int idx, double normalizedValue)
+{
+  Trace(TRACELOC, "%d:%f", idx, normalizedValue);
+  InformHostOfParamChange(idx, normalizedValue);
+}
+
 int IPlugAAX::GetSamplePos()
 { 
   int64_t samplePos;
@@ -488,14 +495,14 @@ void IPlugAAX::GetTime(ITimeInfo* pTimeInfo)
   pTimeInfo->mDenominator = (int) denom;
   
   mTransport->GetCurrentTickPosition(&ppqPos);
-  pTimeInfo->mPPQPos = (double) ppqPos / 960000.0;
+  pTimeInfo->mPPQPos = (double) ppqPos;
   
   mTransport->GetCurrentNativeSampleLocation(&samplePos);
   pTimeInfo->mSamplePos = (double) samplePos;
   
   mTransport->GetCurrentLoopPosition(&pTimeInfo->mTransportLoopEnabled, &cStart, &cEnd);
-  pTimeInfo->mCycleStart = (double) cStart / 960000.0;
-  pTimeInfo->mCycleEnd = (double) cEnd / 960000.0;
+  pTimeInfo->mCycleStart = (double) cStart;
+  pTimeInfo->mCycleEnd = (double) cEnd;
   
   //pTimeInfo->mLastBar ??
 }

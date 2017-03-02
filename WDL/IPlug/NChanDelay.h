@@ -29,7 +29,7 @@ public:
   
   void ClearBuffer()
   {
-    memset(mBuffer.Get(), 0, mNumInChans * mDTSamples * sizeof(double));
+    memset(mBuffer.Get(), 0, mNumInChans * mDTSamples);
   }
   
   void ProcessBlock(double** inputs, double** outputs, int nFrames)

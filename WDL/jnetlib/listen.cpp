@@ -15,7 +15,7 @@ JNL_Listen::JNL_Listen(short port, unsigned int which_interface)
 {
   m_port=port;
   m_socket = ::socket(AF_INET,SOCK_STREAM,0);
-  if (m_socket == INVALID_SOCKET) 
+  if (m_socket < 0) 
   {
   }
   else
@@ -33,14 +33,14 @@ JNL_Listen::JNL_Listen(short port, unsigned int which_interface)
     if (::bind(m_socket,(struct sockaddr *)&sin,sizeof(sin))) 
     {
       closesocket(m_socket);
-      m_socket=INVALID_SOCKET;
+      m_socket=-1;
     }
     else
     {  
       if (::listen(m_socket,8)==-1) 
       {
         closesocket(m_socket);
-        m_socket=INVALID_SOCKET;
+        m_socket=-1;
       }
     }
   }
@@ -48,7 +48,7 @@ JNL_Listen::JNL_Listen(short port, unsigned int which_interface)
 
 JNL_Listen::~JNL_Listen()
 {
-  if (m_socket!=INVALID_SOCKET)
+  if (m_socket>=0)
   {
     closesocket(m_socket);
   }
@@ -56,14 +56,14 @@ JNL_Listen::~JNL_Listen()
 
 JNL_IConnection *JNL_Listen::get_connect(int sendbufsize, int recvbufsize)
 {
-  if (m_socket == INVALID_SOCKET)
+  if (m_socket < 0)
   {
     return NULL;
   }
-  struct sockaddr_in saddr;
-  socklen_t length = sizeof(struct sockaddr_in);
-  SOCKET s = accept(m_socket, (struct sockaddr *) &saddr, &length);
-  if (s != INVALID_SOCKET)
+	struct sockaddr_in saddr;
+	socklen_t length = sizeof(struct sockaddr_in);
+	int s = accept(m_socket, (struct sockaddr *) &saddr, &length);
+  if (s != -1)
   {
     JNL_IConnection *c=new JNL_Connection(NULL,sendbufsize, recvbufsize);
     c->connect(s,&saddr);

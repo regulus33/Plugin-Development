@@ -4,6 +4,7 @@
 #include "Containers.h"
 #include "IPlugOSDetect.h"
 
+#ifndef OS_IOS
 #include "../swell/swell.h"
 #include "../lice/lice_text.h"
 
@@ -130,7 +131,6 @@ struct IText
 #define MakeIRect(a) IRECT(a##_X, a##_Y, a##_X + a##_W, a##_Y + a##_H)
 #define MakeIRectHOffset(a, xoffs) IRECT(a##_X + xoffs, a##_Y, a##_X + a##_W + xoffs, a##_Y + a##_H)
 #define MakeIRectVOffset(a, yoffs) IRECT(a##_X, a##_Y + yoffs, a##_X + a##_W, a##_Y + a##_H + yoffs)
-#define MakeIRectHVOffset(a, xoffs, yoffs) IRECT(a##_X + xoffs, a##_Y + yoffs, a##_X + a##_W + xoffs, a##_Y + a##_H + yoffs)
 
 struct IRECT
 {
@@ -219,7 +219,7 @@ struct IRECT
 
   inline IRECT SubRectVertical(int numSlices, int sliceIdx)
   {
-    float heightOfSubRect = (float(H()) / numSlices);
+    int heightOfSubRect = (H() / numSlices);
     int t = heightOfSubRect * sliceIdx;
 
     return IRECT(L, T + t, R, T + t + heightOfSubRect);
@@ -227,32 +227,12 @@ struct IRECT
 
   inline IRECT SubRectHorizontal(int numSlices, int sliceIdx)
   {
-    float widthOfSubRect = (float(W()) / numSlices);
+    int widthOfSubRect = (W() / numSlices);
     int l = widthOfSubRect * sliceIdx;
 
     return IRECT(L + l, T, L + l + widthOfSubRect, B);
   }
-  
-  inline IRECT GetPadded(int padding)
-  {
-    return IRECT(L-padding, T-padding, R+padding, B+padding);
-  }
-  
-  inline IRECT GetPadded(int padL, int padT, int padR, int padB)
-  {
-    return IRECT(L+padL, T+padT, R+padR, B+padB);
-  }
-  
-  inline IRECT GetHPadded(int padding)
-  {
-    return IRECT(L-padding, T, R+padding, B);
-  }
 
-  inline IRECT GetVPadded(int padding)
-  {
-    return IRECT(L, T-padding, R, B+padding);
-  }
-  
   void Clank(IRECT* pRHS)
   {
     if (L < pRHS->L)
@@ -284,6 +264,8 @@ struct IMouseMod
   IMouseMod(bool l = false, bool r = false, bool s = false, bool c = false, bool a = false)
     : L(l), R(r), S(s), C(c), A(a) {}
 };
+
+#endif // !OS_IOS
 
 struct IMidiMsg
 {
@@ -389,11 +371,9 @@ struct IMidiMsg
   int Channel(); // returns [0, 15] for midi channels 1 ... 16
 
   EStatusMsg StatusMsg() const;
-  int NoteNumber() const;     // Returns [0, 127), -1 if NA.
-  int Velocity() const;       // Returns [0, 127), -1 if NA.
-  int PolyAfterTouch() const;       // Returns [0, 127), -1 if NA.
-  int ChannelAfterTouch() const;       // Returns [0, 127), -1 if NA.
-  int Program() const;        // Returns [0, 127), -1 if NA.
+  int NoteNumber() const;     // Returns [0, 128), -1 if NA.
+  int Velocity() const;       // Returns [0, 128), -1 if NA.
+  int Program() const;        // Returns [0, 128), -1 if NA.
   double PitchWheel() const;  // Returns [-1.0, 1.0], zero if NA.
   EControlChangeMsg ControlChangeIdx() const;
   double ControlChange(EControlChangeMsg idx) const;      // return [0, 1], -1 if NA.
